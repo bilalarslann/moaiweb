@@ -3,12 +3,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import OpenAI from 'openai';
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
-const openai = new OpenAI({
-  apiKey: OPENAI_API_KEY,
+// Initialize OpenAI client on the client side only
+const openai = typeof window !== 'undefined' ? new OpenAI({
+  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
   dangerouslyAllowBrowser: true
-});
+}) : null;
 
 // Solana adresi kontrolü için regex - Base58 karakterleri ve uzunluk kontrolü
 const SOLANA_ADDRESS_REGEX = /[1-9A-HJ-NP-Za-km-z]{32,44}/;
