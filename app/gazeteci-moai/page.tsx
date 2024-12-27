@@ -4,10 +4,22 @@ import Image from 'next/image';
 import OpenAI from 'openai';
 
 // Initialize OpenAI client on the client side only
-const openai = typeof window !== 'undefined' ? new OpenAI({
-  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true
-}) : null;
+const createOpenAIClient = () => {
+  if (typeof window === 'undefined') return null;
+  
+  const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+  if (!apiKey) {
+    console.error('OpenAI API key is missing');
+    return null;
+  }
+
+  return new OpenAI({
+    apiKey,
+    dangerouslyAllowBrowser: true
+  });
+};
+
+const openaiClient = createOpenAIClient();
 
 // Solana adresi kontrolü için regex - Base58 karakterleri ve uzunluk kontrolü
 const SOLANA_ADDRESS_REGEX = /[1-9A-HJ-NP-Za-km-z]{32,44}/;
@@ -270,6 +282,10 @@ export default function GazeticiMoai() {
     setMessages(prev => [...prev, { type: 'user', content: userMessage }]);
 
     try {
+      if (!openaiClient) {
+        throw new Error('OpenAI client is not initialized');
+      }
+
       let botResponse;
       const words = userMessage.toLowerCase().split(/\s+/);
 
@@ -282,7 +298,7 @@ export default function GazeticiMoai() {
         
         if (tokenData) {
           // OpenAI ile analiz et
-          const completion = await openai.chat.completions.create({
+          const completion = await openaiClient.chat.completions.create({
             messages: [
               {
                 role: "system",
@@ -315,7 +331,7 @@ export default function GazeticiMoai() {
           const coinData = await getCoinData(coinId);
           
           if (coinData) {
-            const completion = await openai.chat.completions.create({
+            const completion = await openaiClient.chat.completions.create({
               messages: [
                 {
                   role: "system",
@@ -337,7 +353,7 @@ export default function GazeticiMoai() {
           }
         } else {
           // Genel sohbet için OpenAI'yi kullan
-          const completion = await openai.chat.completions.create({
+          const completion = await openaiClient.chat.completions.create({
             messages: [
               {
                 role: "system",
