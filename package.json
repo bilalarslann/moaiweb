@@ -10,11 +10,11 @@
     "export": "next build && next export"
   },
   "dependencies": {
-    "next": "14.1.2",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "axios": "^1.6.7",
+    "next": "^14.2.22",
     "openai": "^4.28.4",
-    "axios": "^1.6.7"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@types/node": "^20",
