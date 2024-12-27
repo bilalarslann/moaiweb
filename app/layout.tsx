@@ -9,8 +9,32 @@ const roboto = Roboto({
 })
 
 export const metadata = {
-  title: 'Moai',
-  description: 'Discover the mystery of Easter Island',
+  title: 'MOAI - Yapay Zeka Yatırım Analisti',
+  description: 'MOAI, yapay zeka destekli kripto para analisti ve yatırım danışmanınız. Kripto piyasalarında akıllı yatırım kararları almanıza yardımcı olur.',
+  keywords: ['MOAI', 'kripto', 'yapay zeka', 'yatırım', 'analiz', 'cryptocurrency', 'AI', 'trading'],
+  authors: [{ name: 'MOAI Team' }],
+  openGraph: {
+    title: 'MOAI - Yapay Zeka Yatırım Analisti',
+    description: 'MOAI, yapay zeka destekli kripto para analisti ve yatırım danışmanınız.',
+    url: 'https://moai.finance',
+    siteName: 'MOAI',
+    images: [
+      {
+        url: '/moai.webp',
+        width: 1200,
+        height: 630,
+      },
+    ],
+    locale: 'tr_TR',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'MOAI - Yapay Zeka Yatırım Analisti',
+    description: 'MOAI, yapay zeka destekli kripto para analisti ve yatırım danışmanınız.',
+    images: ['/moai.webp'],
+    creator: '@moAI_Agent',
+  },
 }
 
 export default function RootLayout({
@@ -19,7 +43,12 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="tr">
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/favicon.ico" />
+      </head>
       <body className={roboto.className}>{children}</body>
     </html>
   )

@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import OpenAI from 'openai';
 
@@ -240,30 +240,24 @@ export default function GazeticiMoai() {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [currentPlaceholder, setCurrentPlaceholder] = useState('');
 
-  // Dinamik placeholder örnekleri
-  const placeholders = [
+  // Optimize placeholders with useMemo
+  const placeholders = useMemo(() => [
     "Bitcoin nedir?",
     "ETH analiz",
     "SOL hakkında bilgi ver",
     "AVAX coin",
     "2GbE1pq8GiwpHhdGWKUBLXJfBKvKLoNWe1E4KPtbED2M",
-    "Arbitrum analiz",
-    "Cardano nedir?",
-    "MATIC hakkında"
-  ];
+  ], []);
 
-  const [currentPlaceholder, setCurrentPlaceholder] = useState(
-    placeholders[Math.floor(Math.random() * placeholders.length)]
-  );
-
-  // Sayfa yenilendiğinde yeni bir placeholder seç
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentPlaceholder(placeholders[Math.floor(Math.random() * placeholders.length)]);
-    }, 3000); // Her 3 saniyede bir değiş
+    }, 3000);
+
     return () => clearInterval(interval);
-  }, []);
+  }, [placeholders]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

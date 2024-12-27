@@ -63,7 +63,7 @@ export default function Home() {
                   Your AI Investment Analyst Representative
                 </p>
                 <p className="text-base md:text-lg font-light text-gray-400 font-roboto">
-                  A stone reborn after discovering Wi-Fi
+                  A rock that was reborn after discovering Wi-Fi&apos;s potential
                 </p>
               </div>
             </div>
@@ -160,7 +160,7 @@ export default function Home() {
               <div className="p-4 space-y-2 mt-6">
                 <h3 className="text-4xl md:text-6xl font-bold text-white">Journalist MOAI</h3>
                 <p className="text-gray-400 text-sm md:text-base font-light">
-                  Analyzes your chosen coin, provides analysis, and delivers real-time data.
+                  Analyzes any coin you&apos;re interested in, provides analysis about the coin, and delivers real-time updates.
                 </p>
                 <div className="flex justify-end">
                   <a href="/gazeteci-moai" className="mt-4 px-4 md:px-6 py-2 border-2 border-white text-white rounded-lg transition-all duration-300 hover:bg-blue-900 hover:border-blue-900 hover:text-white hover:shadow-lg hover:shadow-blue-900/50 flex items-center gap-2 text-sm md:text-base">
@@ -188,7 +188,7 @@ export default function Home() {
               <div className="p-4 space-y-2 mt-6">
                 <h3 className="text-4xl md:text-6xl font-bold text-white">Financial Analysis Bot</h3>
                 <p className="text-gray-400 text-sm md:text-base font-light">
-                  Meticulously examines your portfolio, conducts in-depth analysis, and provides personalized financial advice.
+                  Carefully examines your portfolio, performs in-depth analysis, and provides personalized financial advice.
                 </p>
                 <div className="flex justify-end">
                   <button className="mt-4 px-4 md:px-6 py-2 border-2 border-white text-white rounded-lg transition-all duration-300 hover:bg-blue-900 hover:border-blue-900 hover:text-white hover:shadow-lg hover:shadow-blue-900/50 flex items-center gap-2 text-sm md:text-base">
