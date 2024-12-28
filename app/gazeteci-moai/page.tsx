@@ -7,7 +7,7 @@ import OpenAI from 'openai';
 const createOpenAIClient = () => {
   if (typeof window === 'undefined') return null;
   
-  const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     console.error('OpenAI API key is missing');
     return null;
@@ -316,7 +316,7 @@ export default function GazeticiMoai() {
 
           botResponse = completion.choices[0]?.message?.content + "\n\n⚠️ Not: Yatırım tavsiyesi değildir.";
         } else {
-          botResponse = "Üzgünüm, bu Solana token adresi için veri bulunamadı veya geçersiz bir adres.";
+          botResponse = "��zgünüm, bu Solana token adresi için veri bulunamadı veya geçersiz bir adres.";
         }
       } else {
         // Önce coin araması için kontrol et
