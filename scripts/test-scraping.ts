@@ -1,5 +1,11 @@
-const chromium = require('chrome-aws-lambda');
-const puppeteer = require('puppeteer-core');
+import { Browser } from 'puppeteer-core';
+
+let chromium: any;
+try {
+  chromium = require('chrome-aws-lambda');
+} catch (error) {
+  console.warn('chrome-aws-lambda could not be loaded, using fallback options');
+}
 
 interface NewsItem {
   title: string;
@@ -7,19 +13,38 @@ interface NewsItem {
   url: string;
 }
 
+async function getBrowser(): Promise<Browser> {
+  // Netlify Functions için özel yapılandırma
+  const options = {
+    args: chromium ? chromium.args : [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process',
+    ],
+    defaultViewport: chromium ? chromium.defaultViewport : {
+      width: 1280,
+      height: 720,
+      deviceScaleFactor: 1,
+    },
+    executablePath: chromium ? await chromium.executablePath : process.env.CHROME_EXECUTABLE_PATH || undefined,
+    headless: true,
+    ignoreHTTPSErrors: true,
+  };
+
+  // Puppeteer'ı dinamik olarak import et
+  const puppeteer = chromium ? require('puppeteer-core') : require('puppeteer');
+  return await puppeteer.launch(options);
+}
+
 async function scrapeNews(searchQuery: string): Promise<NewsItem[]> {
   let browser;
   try {
     console.log('Launching browser...');
-    
-    // Netlify Functions için özel yapılandırma
-    browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath,
-      headless: true,
-      ignoreHTTPSErrors: true,
-    });
+    browser = await getBrowser();
 
     const page = await browser.newPage();
     
@@ -34,7 +59,7 @@ async function scrapeNews(searchQuery: string): Promise<NewsItem[]> {
     console.log('Fetching news for query:', searchQuery);
     await page.goto(`https://cryptopanic.com/news?search=${encodeURIComponent(searchQuery)}`, {
       waitUntil: 'networkidle0',
-      timeout: 15000 // Netlify'da timeout süresini kısalttık
+      timeout: 15000
     });
 
     // Sayfanın yüklenmesi için bekle
