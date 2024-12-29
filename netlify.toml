@@ -1,11 +1,10 @@
 [build]
   command = "npm run build"
   publish = ".next"
-  functions = "netlify/functions"
 
 [functions]
+  external_node_modules = ["axios", "jsdom"]
   node_bundler = "esbuild"
-  external_node_modules = ["axios", "cheerio"]
 
 [[redirects]]
   from = "/api/news"
