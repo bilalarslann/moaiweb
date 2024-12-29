@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
-import * as cheerio from 'cheerio';
+import cheerio from 'cheerio';
 
 // HTTP istekleri için config
 const axiosConfig = {
@@ -14,6 +14,9 @@ const axiosConfig = {
   },
   timeout: 10000
 };
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
