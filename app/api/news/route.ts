@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
-import cheerio from 'cheerio';
+import cheerio, { Element } from 'cheerio';
+
+interface NewsItem {
+  title: string;
+  url: string;
+  content: string;
+}
 
 // HTTP istekleri için config
 const axiosConfig = {
@@ -10,9 +16,11 @@ const axiosConfig = {
     'Accept-Language': 'en-US,en;q=0.5',
     'Connection': 'keep-alive',
     'Upgrade-Insecure-Requests': '1',
-    'Cache-Control': 'max-age=0'
+    'Cache-Control': 'max-age=0',
+    'Referer': 'https://coinmarketcap.com/'
   },
-  timeout: 10000
+  timeout: 30000,
+  maxRedirects: 5
 };
 
 export const runtime = 'nodejs';
@@ -29,84 +37,69 @@ export async function GET(request: Request) {
   try {
     // CoinMarketCap'e git
     const url = `https://coinmarketcap.com/currencies/${coin}/news/`;
+    console.log('Fetching URL:', url);
+    
     const response = await axios.get(url, axiosConfig);
     
     if (response.status !== 200) {
+      console.error('HTTP Error:', response.status);
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     
     const html = response.data;
+    if (!html) {
+      console.error('Empty HTML response');
+      throw new Error('Empty response from server');
+    }
     
     // HTML'i parse et
     const $ = cheerio.load(html);
-    const newsData = [];
+    const newsData: NewsItem[] = [];
     
-    // Haber başlıklarını bul (birden fazla seçici dene)
-    const newsElements = $(
-      '.sc-65e7f566-0.cUjpUw.news_title.top-news-title, ' + 
-      '.sc-65e7f566-0.cUjpUw.news_title, ' +
-      '.cmc-link'
-    ).filter(function() {
-      return $(this).text().trim().length > 0;
+    // Ana haber bölümünü bul
+    const mainNewsSection = $('.sc-aef7b723-0');
+    if (!mainNewsSection.length) {
+      console.warn('Main news section not found, trying alternative selectors');
+    }
+    
+    // Tüm haber elementlerini topla
+    const allNewsElements = $('a').filter(function(this: Element) {
+      const href = $(this).attr('href');
+      const text = $(this).text().trim();
+      return Boolean(href?.includes('/article/') && text.length > 20);
     });
     
-    if (newsElements.length === 0) {
-      return NextResponse.json({ error: 'Haber bulunamadı' }, { status: 404 });
-    }
+    console.log('Found news elements:', allNewsElements.length);
     
     // İlk 5 haberi al
-    for (let i = 0; i < Math.min(5, newsElements.length); i++) {
+    allNewsElements.slice(0, 5).each(function(this: Element) {
       try {
-        const element = newsElements[i];
-        const title = $(element).text().trim();
-        const link = $(element).closest('a').attr('href');
+        const title = $(this).text().trim();
+        const link = $(this).attr('href');
         
-        if (!title || !link) {
-          console.warn(`${i + 1}. haber için başlık veya link bulunamadı`);
-          continue;
-        }
-        
-        // Göreceli linki mutlak linke çevir
-        const absoluteLink = link.startsWith('http') ? link : `https://coinmarketcap.com${link}`;
-        
-        // Haber sayfasına git
-        const articleResponse = await axios.get(absoluteLink, axiosConfig);
-        
-        if (articleResponse.status !== 200) {
-          throw new Error(`Article HTTP error! status: ${articleResponse.status}`);
-        }
-        
-        const article$ = cheerio.load(articleResponse.data);
-        
-        // Haber içeriğini al (birden fazla seçici dene)
-        const content = article$('.sc-aef7b723-0, .news-description, article p').text().trim();
-        
-        if (content) {
+        if (title && link) {
+          const absoluteLink = link.startsWith('http') ? link : `https://coinmarketcap.com${link}`;
           newsData.push({ 
-            title, 
-            content,
-            url: absoluteLink 
+            title,
+            url: absoluteLink,
+            content: `${title} - Detaylı bilgi için linke tıklayın.`
           });
-        } else {
-          console.warn(`${i + 1}. haber için içerik bulunamadı`);
         }
-        
-        // Rate limiting
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
       } catch (error) {
-        console.error(`${i + 1}. başlık işlenirken hata oluştu:`, error);
-        continue;
+        console.warn('Error processing news item:', error);
       }
-    }
+    });
     
     if (newsData.length === 0) {
-      return NextResponse.json({ error: 'Haberler alınamadı' }, { status: 500 });
+      console.error('No news found after processing');
+      return NextResponse.json({ error: 'Haber bulunamadı' }, { status: 404 });
     }
 
+    console.log('Successfully fetched news:', newsData.length);
     return NextResponse.json(newsData);
+    
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error details:', error);
     return NextResponse.json({ 
       error: 'Haber çekme işlemi başarısız',
       details: error instanceof Error ? error.message : 'Unknown error'
