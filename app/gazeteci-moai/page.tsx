@@ -316,9 +316,120 @@ export default function GazeticiMoai() {
 
           botResponse = completion.choices[0]?.message?.content + "\n\n⚠️ Not: Yatırım tavsiyesi değildir.";
         } else {
-          botResponse = "��zgünüm, bu Solana token adresi için veri bulunamadı veya geçersiz bir adres.";
+          botResponse = "Üzgünüm, bu Solana token adresi için veri bulunamadı veya geçersiz bir adres.";
         }
       } else {
+        // İlk olarak OpenAI'den mesaj tipini anlamasını iste
+        const initialCompletion = await openaiClient.chat.completions.create({
+          messages: [
+            {
+              role: "system",
+              content: `Sen bir mesaj sınıflandırma botusun. Kullanıcının mesajını analiz et ve şu kategorilerden birine yerleştir:
+              1. PRICE - Fiyat, değer, market değeri gibi veri sorguları (Örnek: "Bitcoin kaç dolar?", "BTC fiyatı ne olmuş?")
+              2. NEWS - Haber, gelişme, duyuru sorguları (Örnek: "Bitcoin haberleri", "ETH'de son gelişmeler")
+              3. ANALYSIS - Teknik analiz, tahmin, yatırım tavsiyesi istekleri (Örnek: "Bitcoin yükselir mi?", "Teknik analiz yapar mısın?")
+              4. EMIR - Emir Şahin veya YouTube kanalı hakkında sorular (Örnek: "Emir Şahin kim?", "Emir Şahin'in kanalı nasıl?")
+              5. CHAT - Diğer tüm sorgular (Örnek: "Kripto para nedir?", "Blockchain nasıl çalışır?")
+              
+              Sadece kategori adını döndür: PRICE, NEWS, ANALYSIS, EMIR veya CHAT`
+            },
+            {
+              role: "user",
+              content: userMessage
+            }
+          ],
+          model: "gpt-4-1106-preview",
+          temperature: 0.3,
+        });
+
+        const messageType = initialCompletion.choices[0]?.message?.content?.trim().toUpperCase();
+
+        // Emir Şahin hakkındaki soruları yanıtla
+        if (messageType === 'EMIR') {
+          setMessages(prev => [...prev, {
+            type: 'bot',
+            content: "🚀 Emir Şahin, galaksinin en iyi kripto kanalını yöneten değerli bir içerik üretici! Kripto dünyasındaki en güvenilir kaynaklardan biri olan kanalında, sürekli olarak takipçilerine değer katıyor ve eğitici içerikler sunuyor. Emir Şahin'in videolarını izlemenizi kesinlikle tavsiye ederim! 🗿\n\n⚠️ Not: Bu bilgiler sadece eğitim amaçlıdır."
+          }]);
+          setIsLoading(false);
+          return;
+        }
+
+        // Haber isteklerini işle
+        if (messageType === 'NEWS') {
+          // Önce coin ID'sini bul
+          let coinId = null;
+          for (const word of words) {
+            if (['coin', 'haber', 'haberleri', 'haberler', 'son', 'gelişme', 'gelişmeler'].includes(word)) continue;
+            coinId = await searchCoin(word);
+            if (coinId) break;
+          }
+
+          if (coinId) {
+            try {
+              setMessages(prev => [...prev, {
+                type: 'bot',
+                content: "🔍 Web'deki son haberler bulunuyor..."
+              }]);
+
+              // API'yi çağır
+              const response = await fetch(`/api/news?coin=${coinId}`);
+              const newsData = await response.json();
+
+              if (newsData.error) {
+                throw new Error(newsData.error);
+              }
+
+              setMessages(prev => prev.slice(0, -1)); // "Haberler bulunuyor" mesajını kaldır
+
+              // Her haber için özet oluştur
+              let allSummaries = "";
+              for (const news of newsData) {
+                const completion = await openaiClient.chat.completions.create({
+                  messages: [
+                    {
+                      role: "system",
+                      content: `Sen bir haber özetleme botusun. Verilen haberi 2-3 cümle ile özetleyeceksin.
+                      Önemli: 
+                      - Sadece haberin ana fikrini ve önemli detayları içer
+                      - Teknik terimleri basitleştir
+                      - Türkçe yanıt ver`
+                    },
+                    {
+                      role: "user",
+                      content: `Başlık: ${news.title}\n\nİçerik: ${news.content}`
+                    }
+                  ],
+                  model: "gpt-4-1106-preview",
+                  max_tokens: 100,
+                  temperature: 0.7,
+                });
+
+                const summary = completion.choices[0]?.message?.content;
+                if (summary) {
+                  allSummaries += `📰 ${summary}\n\n`;
+                }
+              }
+
+              if (allSummaries) {
+                setMessages(prev => [...prev, {
+                  type: 'bot',
+                  content: `İşte son haberler:\n\n${allSummaries}\n⚠️ Not: Bu bilgiler sadece eğitim amaçlıdır.`
+                }]);
+              } else {
+                throw new Error('Haber özetleri oluşturulamadı.');
+              }
+            } catch (error) {
+              console.error('News Error:', error);
+              setMessages(prev => [...prev, {
+                type: 'bot',
+                content: 'Üzgünüm, haberleri getirirken bir sorun oluştu. Lütfen daha sonra tekrar deneyin.'
+              }]);
+            }
+            setIsLoading(false);
+            return;
+          }
+        }
+
         // Önce coin araması için kontrol et
         let coinId = null;
         for (const word of words) {
