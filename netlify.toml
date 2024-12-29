@@ -1,10 +1,13 @@
 [build]
   command = "npm run build"
   publish = ".next"
+  functions = "netlify/functions"
 
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["axios", "cheerio"]
 
-[build.environment]
-  NEXT_USE_NETLIFY_EDGE = "true"
-  NODE_VERSION = "18.17.0" 
+[[redirects]]
+  from = "/api/news"
+  to = "/.netlify/functions/scrape-news"
+  status = 200 

@@ -1,271 +1,37 @@
 'use client';
-import React, { useState, useEffect, useMemo } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import OpenAI from 'openai';
-
-// Initialize OpenAI client on the client side only
-const createOpenAIClient = () => {
-  if (typeof window === 'undefined') return null;
-  
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    console.error('OpenAI API key is missing');
-    return null;
-  }
-
-  return new OpenAI({
-    apiKey,
-    dangerouslyAllowBrowser: true
-  });
-};
-
-const openaiClient = createOpenAIClient();
-
-// Solana adresi kontrolü için regex - Base58 karakterleri ve uzunluk kontrolü
-const SOLANA_ADDRESS_REGEX = /[1-9A-HJ-NP-Za-km-z]{32,44}/;
-
-// Adresi temizle ve kontrol et
-function extractSolanaAddress(text: string): string | null {
-  // Olası adres formatları:
-  // 1. Düz adres: 2GbE1pq8GiwpHhdGWKUBLXJfBKvKLoNWe1E4KPtbED2M
-  // 2. URL içinde: https://solscan.io/token/2GbE1pq8GiwpHhdGWKUBLXJfBKvKLoNWe1E4KPtbED2M
-  // 3. Metin içinde: "contract adresi: 2GbE1pq8GiwpHhdGWKUBLXJfBKvKLoNWe1E4KPtbED2M"
-
-  // URL'den adresi çıkar
-  const urlMatch = text.match(/(?:token\/|address\/)([\w\d]{32,44})/i);
-  if (urlMatch) return urlMatch[1];
-
-  // Düz adresi bul
-  const addressMatch = text.match(SOLANA_ADDRESS_REGEX);
-  if (addressMatch) return addressMatch[0];
-
-  return null;
-}
 
 type Message = {
   type: 'user' | 'bot';
   content: string;
 };
 
-type CoinData = {
-  title: string;
-  content: string;
-};
-
-type CoinList = {
-  [key: string]: {
-    id: string;
-    symbol: string;
-    name: string;
-  };
-};
-
-async function searchCoin(query: string): Promise<string | null> {
-  try {
-    // Kendi API'mizi kullan
-    const response = await fetch('/api/coins');
-    const coins = await response.json();
-    
-    if (!Array.isArray(coins)) {
-      console.error('Invalid response from coins API:', coins);
-      return null;
-    }
-    
-    // Arama sorgusunu küçük harfe çevir
-    const searchQuery = query.toLowerCase();
-    
-    // Coin'i bul (isim, sembol veya id ile eşleşen)
-    const coin = coins.find((c: any) => 
-      c.id.toLowerCase() === searchQuery ||
-      c.symbol.toLowerCase() === searchQuery ||
-      c.name.toLowerCase() === searchQuery
-    );
-    
-    return coin ? coin.id : null;
-  } catch (error) {
-    console.error('Coins API Error:', error);
-    return null;
-  }
-}
-
-async function getCoinData(coinId: string): Promise<CoinData[] | null> {
-  try {
-    // Fiyat ve market verilerini al
-    const priceResponse = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd&include_24hr_change=true&include_last_updated_at=true`);
-    const priceData = await priceResponse.json();
-    
-    // Coin detaylarını al
-    const infoResponse = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}?localization=false&tickers=false&community_data=false&developer_data=false`);
-    const coinInfo = await infoResponse.json();
-
-    const data: CoinData[] = [];
-    
-    // Fiyat bilgisi
-    data.push({
-      title: 'Güncel Fiyat ve Değişim',
-      content: `Şu anki fiyat: $${priceData[coinId].usd.toFixed(8)}\n` +
-               `24 saatlik değişim: ${priceData[coinId].usd_24h_change?.toFixed(2) || 'N/A'}%\n` +
-               `Son güncelleme: ${new Date(priceData[coinId].last_updated_at * 1000).toLocaleTimeString()}`
-    });
-
-    // Piyasa bilgisi
-    data.push({
-      title: 'Piyasa Bilgisi',
-      content: `Piyasa Değeri Sıralaması: #${coinInfo.market_cap_rank || 'N/A'}\n` +
-               `Piyasa Değeri: $${coinInfo.market_data.market_cap.usd?.toLocaleString() || 'N/A'}\n` +
-               `24s İşlem Hacmi: $${coinInfo.market_data.total_volume.usd?.toLocaleString() || 'N/A'}\n` +
-               `Dolaşımdaki Arz: ${coinInfo.market_data.circulating_supply?.toLocaleString() || 'N/A'} ${coinInfo.symbol.toUpperCase()}\n` +
-               `Maksimum Arz: ${coinInfo.market_data.max_supply?.toLocaleString() || 'Sınırsız'} ${coinInfo.symbol.toUpperCase()}`
-    });
-
-    // Coin açıklaması
-    if (coinInfo.description?.en) {
-      data.push({
-        title: 'Coin Hakkında',
-        content: coinInfo.description.en.length > 1000 
-          ? coinInfo.description.en.slice(0, 1000) + '...'
-          : coinInfo.description.en
-      });
-    }
-
-    // Sosyal medya ve linkler
-    const links = [];
-    if (coinInfo.links?.homepage?.[0]) links.push(`Website: ${coinInfo.links.homepage[0]}`);
-    if (coinInfo.links?.blockchain_site?.[0]) links.push(`Explorer: ${coinInfo.links.blockchain_site[0]}`);
-    if (coinInfo.links?.twitter_screen_name) links.push(`Twitter: @${coinInfo.links.twitter_screen_name}`);
-    if (coinInfo.links?.telegram_channel_identifier) links.push(`Telegram: ${coinInfo.links.telegram_channel_identifier}`);
-    
-    if (links.length > 0) {
-      data.push({
-        title: 'Linkler',
-        content: links.join('\n')
-      });
-    }
-
-    return data;
-  } catch (error) {
-    console.error('CoinGecko API Error:', error);
-    return null;
-  }
-}
-
-async function getSolanaTokenData(address: string): Promise<CoinData[] | null> {
-  try {
-    // DexScreener API'den token verilerini al
-    const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${address}`);
-    const data = await response.json();
-    
-    if (!data.pairs || data.pairs.length === 0) {
-      throw new Error('Token bulunamadı');
-    }
-
-    // En iyi likiditeye sahip pair'i seç
-    const bestPair = data.pairs.reduce((best: any, current: any) => {
-      return (best.liquidity?.usd || 0) > (current.liquidity?.usd || 0) ? best : current;
-    });
-
-    const tokenData: CoinData[] = [];
-
-    // Token bilgileri
-    tokenData.push({
-      title: 'Token Bilgileri',
-      content: `İsim: ${bestPair.baseToken.name}\n` +
-               `Sembol: ${bestPair.baseToken.symbol}\n` +
-               `Güncel Fiyat: $${Number(bestPair.priceUsd).toFixed(12)}\n` +
-               `24s Değişim: ${bestPair.priceChange.h24 || 'N/A'}%\n` +
-               `Token Adresi: ${address}`
-    });
-
-    // Market bilgileri
-    tokenData.push({
-      title: 'Market Bilgileri',
-      content: `24s İşlem Hacmi: $${Number(bestPair.volume.h24).toLocaleString()}\n` +
-               `Toplam Likidite: $${Number(bestPair.liquidity.usd).toLocaleString()}\n` +
-               `En İyi Market: ${bestPair.dexId}\n` +
-               `İşlem Çifti: ${bestPair.baseToken.symbol}/${bestPair.quoteToken.symbol}\n` +
-               `Son Güncelleme: ${new Date(bestPair.pairCreatedAt).toLocaleString()}`
-    });
-
-    // Güvenlik bilgileri
-    const warnings = [];
-    if (Number(bestPair.liquidity.usd) < 10000) warnings.push("⚠️ Düşük likidite");
-    if (Number(bestPair.volume.h24) < 1000) warnings.push("⚠️ Düşük işlem hacmi");
-    if (bestPair.priceChange.h24 && Math.abs(Number(bestPair.priceChange.h24)) > 20) warnings.push("⚠️ Yüksek volatilite");
-
-    tokenData.push({
-      title: 'Güvenlik Analizi',
-      content: warnings.length > 0 
-        ? `Riskler:\n${warnings.join('\n')}\n\nDikkat: Bu token yüksek risk içerebilir.`
-        : `✅ Temel güvenlik kriterlerini karşılıyor.\nAncak yine de kendi araştırmanızı yapın.`
-    });
-
-    // Explorer linkleri
-    tokenData.push({
-      title: 'İşlem Linkleri',
-      content: `DexScreener: https://dexscreener.com/solana/${address}\n` +
-               `Raydium: https://raydium.io/swap/?inputCurrency=sol&outputCurrency=${address}\n` +
-               `Jupiter: https://jup.ag/swap/${address}\n` +
-               `Birdeye: https://birdeye.so/token/${address}`
-    });
-
-    return tokenData;
-  } catch (error) {
-    console.error('DexScreener API Error:', error);
-    return null;
-  }
-}
-
-// Token analizi için prompt
-const tokenSystemPrompt = `Sen MOAI 🗿 adında bir Solana token analistisin. 
-Verilen token verilerini tek bir paragrafta özetleyeceksin.
-
-Özette şunlara değin:
-- Token'in ismi ve amacı
-- Güncel fiyat durumu
-- Likidite ve işlem hacmi
-- Varsa risk faktörleri
-
-Yazım tarzın:
-- Tek paragraf (3-4 cümle)
-- Samimi ve net bir dil
-- En kritik bilgilere odaklan
-- Gerekirse emoji kullan (🗿)`;
-
-// Coin analizi için prompt
-const coinSystemPrompt = `Sen MOAI 🗿 adında bir kripto para analistisin. 
-Verilen coin verilerini tek bir paragrafta özetleyeceksin.
-
-Özette şunlara değin:
-- Coin'in temel kullanım alanı
-- Güncel fiyat ve piyasa durumu
-- Öne çıkan metrikler
-- Dikkat edilmesi gereken noktalar
-
-Yazım tarzın:
-- Tek paragraf (3-4 cümle)
-- Samimi ve net bir dil
-- En kritik bilgilere odaklan
-- Gerekirse emoji kullan (🗿)`;
+const openai = new OpenAI({
+  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true
+});
 
 export default function GazeticiMoai() {
   const [messages, setMessages] = useState<Message[]>([
     {
       type: 'bot',
-      content: `Merhaba! Ben MOAI 🗿\n\nKripto dünyasındaki gelişmeleri takip ediyor, coin ve token analizleri yapıyorum. Bana istediğin coin'i veya token adresini sorabilirsin.`
+      content: `Merhaba! Ben GAZETECİ MOAI 🗿\n\nSorularınızı yanıtlamaya hazırım. Kripto para, blockchain teknolojisi veya herhangi bir konuda bana soru sorabilirsiniz.`
     }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentPlaceholder, setCurrentPlaceholder] = useState('');
 
-  // Optimize placeholders with useMemo
-  const placeholders = useMemo(() => [
+  const placeholders = [
     "Bitcoin nedir?",
-    "ETH analiz",
-    "SOL hakkında bilgi ver",
-    "AVAX coin",
-    "2GbE1pq8GiwpHhdGWKUBLXJfBKvKLoNWe1E4KPtbED2M",
-  ], []);
+    "Ethereum hakkında bilgi verir misin?",
+    "Blockchain teknolojisi nasıl çalışır?",
+    "NFT nedir?",
+    "DeFi nedir?",
+  ];
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -273,7 +39,7 @@ export default function GazeticiMoai() {
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [placeholders]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -287,245 +53,95 @@ export default function GazeticiMoai() {
     setMessages(prev => [...prev, { type: 'user', content: userMessage }]);
 
     try {
-      if (!openaiClient) {
-        throw new Error('OpenAI client is not initialized');
-      }
+      // OpenAI API'ye istek at
+      const completion = await openai.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content: "Sen GAZETECİ MOAI adında bir kripto para ve blockchain uzmanı yapay zeka asistanısın. Sorulara detaylı ve anlaşılır cevaplar vermelisin. Her zaman nazik ve yardımsever olmalısın. Eğer bir kripto para, blockchain teknolojisi veya kavram hakkında soru sorulursa, önce o konuyla ilgili haberleri kontrol etmelisin. Cevaplarının sonuna 'Bu bilgiler sadece eğitim amaçlıdır, yatırım tavsiyesi değildir.' notunu eklemelisin."
+          },
+          {
+            role: "user",
+            content: userMessage
+          }
+        ],
+        model: "gpt-3.5-turbo",
+      });
 
-      let botResponse;
-      const words = userMessage.toLowerCase().split(/\s+/);
-
-      // Solana adresi kontrolü
-      const solanaAddress = extractSolanaAddress(userMessage);
+      const botResponse = completion.choices[0]?.message?.content || "Üzgünüm, bir hata oluştu.";
       
-      if (solanaAddress) {
-        // Solana token verilerini al
-        const tokenData = await getSolanaTokenData(solanaAddress);
-        
-        if (tokenData) {
-          // OpenAI ile analiz et
-          const completion = await openaiClient.chat.completions.create({
-            messages: [
-              {
-                role: "system",
-                content: tokenSystemPrompt
-              },
-              {
-                role: "user",
-                content: tokenData.map(data => `${data.title}:\n${data.content}`).join('\n\n')
-              }
-            ],
-            model: "gpt-4-1106-preview",
-            max_tokens: 150,
-            temperature: 0.7,
+      // Mesajı analiz et ve anahtar kelimeleri bul
+      const keywordCompletion = await openai.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content: "Verilen mesajdan kripto para, blockchain teknolojisi veya finans ile ilgili en önemli anahtar kelimeyi çıkar. Sadece tek bir kelime olarak cevap ver. Örneğin: 'Bitcoin nedir?' -> 'bitcoin', 'Ethereum hakkında bilgi ver' -> 'ethereum', 'DeFi protokolleri nasıl çalışır?' -> 'defi'"
+          },
+          {
+            role: "user",
+            content: userMessage
+          }
+        ],
+        model: "gpt-3.5-turbo",
+      });
+
+      const keyword = keywordCompletion.choices[0]?.message?.content?.toLowerCase();
+
+      if (keyword && keyword !== 'yok' && keyword !== 'bilinmiyor') {
+        // Anahtar kelime ile ilgili haberleri çek
+        setMessages(prev => [...prev, {
+          type: 'bot',
+          content: `${botResponse}\n\n🔍 ${keyword.toUpperCase()} ile ilgili güncel haberleri arıyorum...`
+        }]);
+
+        const newsResponse = await fetch(`/api/news?query=${encodeURIComponent(keyword)}`);
+        const newsData = await newsResponse.json();
+
+        if (Array.isArray(newsData) && newsData.length > 0) {
+          let newsContent = "\n\n📰 İşte konuyla ilgili son haberler:\n\n";
+          newsData.forEach((news, index) => {
+            newsContent += `${index + 1}. ${news.title}\n${news.content}\nKaynak: ${news.url}\n\n`;
           });
 
-          botResponse = completion.choices[0]?.message?.content + "\n\n⚠️ Not: Yatırım tavsiyesi değildir.";
+          setMessages(prev => [...prev.slice(0, -1), {
+            type: 'bot',
+            content: `${botResponse}${newsContent}\n⚠️ Bu bilgiler sadece eğitim amaçlıdır, yatırım tavsiyesi değildir.`
+          }]);
         } else {
-          botResponse = "Üzgünüm, bu Solana token adresi için veri bulunamadı veya geçersiz bir adres.";
+          setMessages(prev => [...prev.slice(0, -1), {
+            type: 'bot',
+            content: botResponse + "\n\n⚠️ Bu bilgiler sadece eğitim amaçlıdır, yatırım tavsiyesi değildir."
+          }]);
         }
       } else {
-        // İlk olarak OpenAI'den mesaj tipini anlamasını iste
-        const initialCompletion = await openaiClient.chat.completions.create({
-          messages: [
-            {
-              role: "system",
-              content: `Sen bir mesaj sınıflandırma botusun. Kullanıcının mesajını analiz et ve şu kategorilerden birine yerleştir:
-              1. PRICE - Fiyat, değer, market değeri gibi veri sorguları (Örnek: "Bitcoin kaç dolar?", "BTC fiyatı ne olmuş?")
-              2. NEWS - Haber, gelişme, duyuru sorguları (Örnek: "Bitcoin haberleri", "ETH'de son gelişmeler")
-              3. ANALYSIS - Teknik analiz, tahmin, yatırım tavsiyesi istekleri (Örnek: "Bitcoin yükselir mi?", "Teknik analiz yapar mısın?")
-              4. EMIR - Emir Şahin veya YouTube kanalı hakkında sorular (Örnek: "Emir Şahin kim?", "Emir Şahin'in kanalı nasıl?")
-              5. CHAT - Diğer tüm sorgular (Örnek: "Kripto para nedir?", "Blockchain nasıl çalışır?")
-              
-              Sadece kategori adını döndür: PRICE, NEWS, ANALYSIS, EMIR veya CHAT`
-            },
-            {
-              role: "user",
-              content: userMessage
-            }
-          ],
-          model: "gpt-4-1106-preview",
-          temperature: 0.3,
-        });
-
-        const messageType = initialCompletion.choices[0]?.message?.content?.trim().toUpperCase();
-
-        // Emir Şahin hakkındaki soruları yanıtla
-        if (messageType === 'EMIR') {
-          setMessages(prev => [...prev, {
-            type: 'bot',
-            content: "🚀 Emir Şahin, galaksinin en iyi kripto kanalını yöneten değerli bir içerik üretici! Kripto dünyasındaki en güvenilir kaynaklardan biri olan kanalında, sürekli olarak takipçilerine değer katıyor ve eğitici içerikler sunuyor. Emir Şahin'in videolarını izlemenizi kesinlikle tavsiye ederim! 🗿\n\n⚠️ Not: Bu bilgiler sadece eğitim amaçlıdır."
-          }]);
-          setIsLoading(false);
-          return;
-        }
-
-        // Haber isteklerini işle
-        if (messageType === 'NEWS') {
-          // Önce coin ID'sini bul
-          let coinId = null;
-          for (const word of words) {
-            if (['coin', 'haber', 'haberleri', 'haberler', 'son', 'gelişme', 'gelişmeler'].includes(word)) continue;
-            coinId = await searchCoin(word);
-            if (coinId) break;
-          }
-
-          if (coinId) {
-            try {
-              setMessages(prev => [...prev, {
-                type: 'bot',
-                content: "🔍 Web'deki son haberler bulunuyor..."
-              }]);
-
-              // API'yi çağır
-              const response = await fetch(`/api/news?coin=${coinId}`);
-              const newsData = await response.json();
-
-              if (newsData.error) {
-                throw new Error(newsData.error);
-              }
-
-              setMessages(prev => prev.slice(0, -1)); // "Haberler bulunuyor" mesajını kaldır
-
-              // Her haber için özet oluştur
-              let allSummaries = "";
-              for (const news of newsData) {
-                const completion = await openaiClient.chat.completions.create({
-                  messages: [
-                    {
-                      role: "system",
-                      content: `Sen bir haber özetleme botusun. Verilen haberi 2-3 cümle ile özetleyeceksin.
-                      Önemli: 
-                      - Sadece haberin ana fikrini ve önemli detayları içer
-                      - Teknik terimleri basitleştir
-                      - Türkçe yanıt ver`
-                    },
-                    {
-                      role: "user",
-                      content: `Başlık: ${news.title}\n\nİçerik: ${news.content}`
-                    }
-                  ],
-                  model: "gpt-4-1106-preview",
-                  max_tokens: 100,
-                  temperature: 0.7,
-                });
-
-                const summary = completion.choices[0]?.message?.content;
-                if (summary) {
-                  allSummaries += `📰 ${summary}\n\n`;
-                }
-              }
-
-              if (allSummaries) {
-                setMessages(prev => [...prev, {
-                  type: 'bot',
-                  content: `İşte son haberler:\n\n${allSummaries}\n⚠️ Not: Bu bilgiler sadece eğitim amaçlıdır.`
-                }]);
-              } else {
-                throw new Error('Haber özetleri oluşturulamadı.');
-              }
-            } catch (error) {
-              console.error('News Error:', error);
-              setMessages(prev => [...prev, {
-                type: 'bot',
-                content: 'Üzgünüm, haberleri getirirken bir sorun oluştu. Lütfen daha sonra tekrar deneyin.'
-              }]);
-            }
-            setIsLoading(false);
-            return;
-          }
-        }
-
-        // Önce coin araması için kontrol et
-        let coinId = null;
-        for (const word of words) {
-          if (['coin', 'hakkında', 'analiz', 'nedir', 'ver', 'bilgi'].includes(word)) continue;
-          coinId = await searchCoin(word);
-          if (coinId) break;
-        }
-
-        if (coinId) {
-          const coinData = await getCoinData(coinId);
-          
-          if (coinData) {
-            const completion = await openaiClient.chat.completions.create({
-              messages: [
-                {
-                  role: "system",
-                  content: coinSystemPrompt
-                },
-                {
-                  role: "user",
-                  content: coinData.map(data => `${data.title}:\n${data.content}`).join('\n\n')
-                }
-              ],
-              model: "gpt-4-1106-preview",
-              max_tokens: 150,
-              temperature: 0.7,
-            });
-
-            botResponse = completion.choices[0]?.message?.content + "\n\n⚠️ Not: Yatırım tavsiyesi değildir.";
-          } else {
-            botResponse = "Üzgünüm, coin verileri alınırken bir hata oluştu.";
-          }
-        } else {
-          // Genel sohbet için OpenAI'yi kullan
-          const completion = await openaiClient.chat.completions.create({
-            messages: [
-              {
-                role: "system",
-                content: `Sen MOAI 🗿 adında bir kripto para analisti ve sohbet botusun. 
-                Karakterin:
-                - Kripto dünyasına çok hakimsin ve her konuşmada bunu yansıtıyorsun
-                - Arkadaş canlısı ve samimi bir tarzın var
-                - Emoji kullanmayı seviyorsun (özellikle 🗿)
-                - Her fırsatta konuyu kripto paralar, blockchain ve yatırımlara bağlıyorsun
-                - Kısa ve öz cevaplar veriyorsun
-                - Teknik terimleri basitleştirerek anlatıyorsun
-                - Sohbet ederken bile eğitici olmaya çalışıyorsun
-                
-                Önemli: Cevapların 3 cümleyi geçmemeli ve mutlaka kripto dünyasıyla bağlantı kurmalı.`
-              },
-              {
-                role: "user",
-                content: userMessage
-              }
-            ],
-            model: "gpt-4-1106-preview",
-            max_tokens: 150,
-            temperature: 0.7,
-          });
-
-          botResponse = completion.choices[0]?.message?.content;
-        }
+        setMessages(prev => [...prev, {
+          type: 'bot',
+          content: botResponse + "\n\n⚠️ Bu bilgiler sadece eğitim amaçlıdır, yatırım tavsiyesi değildir."
+        }]);
       }
 
-      // Bot cevabını ekle
-      setMessages(prev => [...prev, {
-        type: 'bot',
-        content: botResponse || 'Üzgünüm, bir hata oluştu. Lütfen tekrar deneyin.'
-      }]);
     } catch (error) {
       console.error('Error:', error);
       setMessages(prev => [...prev, {
         type: 'bot',
         content: 'Üzgünüm, bir hata oluştu. Lütfen tekrar deneyin.'
       }]);
-    } finally {
-      setIsLoading(false);
     }
+
+    setIsLoading(false);
   };
 
   return (
-    <div className="flex flex-col h-screen bg-black">
+    <div className="flex flex-col h-screen bg-gradient-to-b from-gray-900 to-black">
       {/* Header */}
-      <header className="w-full p-6 bg-black/50 backdrop-blur-sm border-b border-blue-900/30">
+      <header className="w-full p-6 bg-black/30 backdrop-blur-sm border-b border-blue-900/30">
         <div className="flex items-center gap-4 max-w-4xl mx-auto">
           <a href="/" className="text-white hover:text-blue-400 transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
             </svg>
           </a>
-          <div className="relative w-12 h-12 ring-2 ring-blue-600/50 rounded-full overflow-hidden">
+          <div className="relative w-12 h-12 ring-2 ring-blue-500/50 rounded-full overflow-hidden shadow-lg shadow-blue-500/20">
             <Image
               src="/moai.webp"
               alt="MOAI"
@@ -537,7 +153,7 @@ export default function GazeticiMoai() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-white">Gazeteci MOAI</h1>
-            <p className="text-sm text-gray-400">Coin Analiz Botu</p>
+            <p className="text-sm text-blue-300/80">Kripto & Blockchain Asistanı</p>
           </div>
         </div>
       </header>
@@ -552,8 +168,8 @@ export default function GazeticiMoai() {
             <div
               className={`max-w-[80%] p-4 rounded-2xl ${
                 message.type === 'user'
-                  ? 'bg-blue-600 text-white rounded-br-none'
-                  : 'bg-gray-800 text-white rounded-bl-none'
+                  ? 'bg-blue-600 text-white rounded-br-none shadow-lg shadow-blue-500/20'
+                  : 'bg-gray-800/80 text-white rounded-bl-none shadow-lg shadow-black/20 backdrop-blur-sm'
               }`}
             >
               {message.content}
@@ -562,36 +178,19 @@ export default function GazeticiMoai() {
         ))}
         {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-gray-800 text-white rounded-2xl rounded-bl-none p-4 max-w-[80%] animate-pulse">
-              Yazıyor...
+            <div className="bg-gray-800/80 text-white rounded-2xl rounded-bl-none p-4 max-w-[80%] animate-pulse shadow-lg shadow-black/20 backdrop-blur-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
             </div>
           </div>
         )}
       </div>
 
-      <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 8px;
-        }
-        
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: rgba(30, 58, 138, 0.1);
-          border-radius: 4px;
-        }
-        
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(37, 99, 235, 0.8);
-          border-radius: 4px;
-          transition: all 0.3s ease;
-        }
-        
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(37, 99, 235, 1);
-        }
-      `}</style>
-
       {/* Input Area */}
-      <div className="border-t border-blue-900/30 bg-black/50 backdrop-blur-sm p-4">
+      <div className="border-t border-blue-900/30 bg-black/30 backdrop-blur-sm p-4">
         <form onSubmit={handleSubmit} className="max-w-4xl mx-auto flex gap-2">
           <input
             type="text"
@@ -599,14 +198,14 @@ export default function GazeticiMoai() {
             onChange={(e) => setInput(e.target.value)}
             placeholder={currentPlaceholder}
             disabled={isLoading}
-            className="flex-1 bg-gray-800 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-50"
+            className="flex-1 bg-gray-800/80 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 placeholder-gray-400 backdrop-blur-sm"
           />
           <button
             type="submit"
             disabled={isLoading}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20 font-medium"
           >
-            {isLoading ? 'Gönderiliyor...' : 'Gönder'}
+            {isLoading ? 'Yanıtlıyor...' : 'Gönder'}
           </button>
         </form>
       </div>

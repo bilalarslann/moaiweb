@@ -1,108 +1,134 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
-import cheerio, { Element } from 'cheerio';
+import * as cheerio from 'cheerio';
 
 interface NewsItem {
   title: string;
-  url: string;
   content: string;
+  url: string;
 }
 
-// HTTP istekleri için config
-const axiosConfig = {
-  headers: {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.5',
-    'Connection': 'keep-alive',
-    'Upgrade-Insecure-Requests': '1',
-    'Cache-Control': 'max-age=0',
-    'Referer': 'https://coinmarketcap.com/'
-  },
-  timeout: 30000,
-  maxRedirects: 5
-};
+async function scrapeNews(searchQuery: string): Promise<NewsItem[]> {
+  try {
+    console.log('Fetching news for query:', searchQuery);
+    const response = await axios.get(`https://cryptopanic.com/news?search=${encodeURIComponent(searchQuery)}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Cache-Control': 'max-age=0'
+      },
+      timeout: 10000
+    });
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+    if (!response.data) {
+      console.error('No data received from Cryptopanic');
+      return [];
+    }
+
+    const $ = cheerio.load(response.data);
+    const newsPromises: Promise<NewsItem | null>[] = [];
+
+    console.log('Found news rows:', $('.news-row').length);
+
+    // Her haber için promise oluştur
+    $('.news-row').slice(0, 5).each((_, article) => {
+      const titleElement = $(article).find('.title-text');
+      const title = titleElement.text().trim();
+      const url = titleElement.attr('href');
+      const initialContent = $(article).find('.description-body').text().trim();
+
+      console.log('Processing news item:', { title, url });
+
+      const newsPromise = (async () => {
+        let content = initialContent;
+
+        // İçerik yoksa veya çok kısaysa haber detayına git
+        if (!content || content.length < 50) {
+          try {
+            const detailResponse = await axios.get(`https://cryptopanic.com${url}`, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5'
+              },
+              timeout: 5000
+            });
+            const detail$ = cheerio.load(detailResponse.data);
+            content = detail$('.description-body').text().trim();
+          } catch (error) {
+            console.error('Error fetching news detail:', error);
+            return null;
+          }
+        }
+
+        if (title && content && url) {
+          return {
+            title,
+            content: content.length > 300 ? content.substring(0, 300) + '...' : content,
+            url: `https://cryptopanic.com${url}`
+          };
+        }
+        return null;
+      })();
+
+      newsPromises.push(newsPromise);
+    });
+
+    // Tüm haberleri paralel olarak çek
+    const newsResults = await Promise.all(newsPromises);
+    const filteredResults = newsResults.filter((item): item is NewsItem => item !== null);
+    
+    console.log('Filtered news count:', filteredResults.length);
+    return filteredResults;
+
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error('Error scraping Cryptopanic:', error.message);
+    }
+    if (axios.isAxiosError(error)) {
+      console.error('Axios error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data
+      });
+    }
+    return [];
+  }
+}
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const coin = searchParams.get('coin');
-
-  if (!coin) {
-    return NextResponse.json({ error: 'Coin parametresi gerekli' }, { status: 400 });
-  }
-
   try {
-    // CoinMarketCap'e git
-    const url = `https://coinmarketcap.com/currencies/${coin}/news/`;
-    console.log('Fetching URL:', url);
-    
-    const response = await axios.get(url, axiosConfig);
-    
-    if (response.status !== 200) {
-      console.error('HTTP Error:', response.status);
-      throw new Error(`HTTP error! status: ${response.status}`);
+    const { searchParams } = new URL(request.url);
+    const query = searchParams.get('query');
+
+    if (!query) {
+      return NextResponse.json({ error: 'Query parameter is required' }, { status: 400 });
     }
-    
-    const html = response.data;
-    if (!html) {
-      console.error('Empty HTML response');
-      throw new Error('Empty response from server');
-    }
-    
-    // HTML'i parse et
-    const $ = cheerio.load(html);
-    const newsData: NewsItem[] = [];
-    
-    // Ana haber bölümünü bul
-    const mainNewsSection = $('.sc-aef7b723-0');
-    if (!mainNewsSection.length) {
-      console.warn('Main news section not found, trying alternative selectors');
-    }
-    
-    // Tüm haber elementlerini topla
-    const allNewsElements = $('a').filter(function(this: Element) {
-      const href = $(this).attr('href');
-      const text = $(this).text().trim();
-      return Boolean(href?.includes('/article/') && text.length > 20);
-    });
-    
-    console.log('Found news elements:', allNewsElements.length);
-    
-    // İlk 5 haberi al
-    allNewsElements.slice(0, 5).each(function(this: Element) {
-      try {
-        const title = $(this).text().trim();
-        const link = $(this).attr('href');
-        
-        if (title && link) {
-          const absoluteLink = link.startsWith('http') ? link : `https://coinmarketcap.com${link}`;
-          newsData.push({ 
-            title,
-            url: absoluteLink,
-            content: `${title} - Detaylı bilgi için linke tıklayın.`
-          });
-        }
-      } catch (error) {
-        console.warn('Error processing news item:', error);
+
+    console.log('Starting news fetch for query:', query);
+    const news = await scrapeNews(query);
+    console.log('News fetch completed, items:', news.length);
+
+    return new NextResponse(JSON.stringify(news), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type'
       }
     });
-    
-    if (newsData.length === 0) {
-      console.error('No news found after processing');
-      return NextResponse.json({ error: 'Haber bulunamadı' }, { status: 404 });
-    }
-
-    console.log('Successfully fetched news:', newsData.length);
-    return NextResponse.json(newsData);
-    
   } catch (error) {
-    console.error('Error details:', error);
-    return NextResponse.json({ 
-      error: 'Haber çekme işlemi başarısız',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    console.error('News API Error:', error);
+    return new NextResponse(JSON.stringify({ error: 'Failed to fetch news' }), {
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      }
+    });
   }
 } 
