@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
-import * as cheerio from 'cheerio';
+import { JSDOM } from 'jsdom';
 
 interface NewsItem {
   title: string;
@@ -28,17 +28,19 @@ async function scrapeNews(searchQuery: string): Promise<NewsItem[]> {
       return [];
     }
 
-    const $ = cheerio.load(response.data);
+    const dom = new JSDOM(response.data);
+    const document = dom.window.document;
     const newsPromises: Promise<NewsItem | null>[] = [];
 
-    console.log('Found news rows:', $('.news-row').length);
+    const newsRows = document.querySelectorAll('.news-row');
+    console.log('Found news rows:', newsRows.length);
 
     // Her haber için promise oluştur
-    $('.news-row').slice(0, 5).each((_, article) => {
-      const titleElement = $(article).find('.title-text');
-      const title = titleElement.text().trim();
-      const url = titleElement.attr('href');
-      const initialContent = $(article).find('.description-body').text().trim();
+    Array.from(newsRows).slice(0, 5).forEach((article: Element) => {
+      const titleElement = article.querySelector('.title-text');
+      const title = titleElement?.textContent?.trim() || '';
+      const url = titleElement?.getAttribute('href') || '';
+      const initialContent = article.querySelector('.description-body')?.textContent?.trim() || '';
 
       console.log('Processing news item:', { title, url });
 
@@ -56,8 +58,8 @@ async function scrapeNews(searchQuery: string): Promise<NewsItem[]> {
               },
               timeout: 5000
             });
-            const detail$ = cheerio.load(detailResponse.data);
-            content = detail$('.description-body').text().trim();
+            const detailDom = new JSDOM(detailResponse.data);
+            content = detailDom.window.document.querySelector('.description-body')?.textContent?.trim() || '';
           } catch (error) {
             console.error('Error fetching news detail:', error);
             return null;
