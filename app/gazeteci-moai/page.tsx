@@ -62,9 +62,14 @@ type CoinList = {
 
 async function searchCoin(query: string): Promise<string | null> {
   try {
-    // CoinGecko'dan coin listesini al
-    const response = await fetch('https://api.coingecko.com/api/v3/coins/list');
+    // Kendi API'mizi kullan
+    const response = await fetch('/api/coins');
     const coins = await response.json();
+    
+    if (!Array.isArray(coins)) {
+      console.error('Invalid response from coins API:', coins);
+      return null;
+    }
     
     // Arama sorgusunu küçük harfe çevir
     const searchQuery = query.toLowerCase();
@@ -78,7 +83,7 @@ async function searchCoin(query: string): Promise<string | null> {
     
     return coin ? coin.id : null;
   } catch (error) {
-    console.error('CoinGecko API Error:', error);
+    console.error('Coins API Error:', error);
     return null;
   }
 }
