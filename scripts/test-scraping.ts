@@ -1,4 +1,5 @@
 import { Browser } from 'puppeteer-core';
+import puppeteer from 'puppeteer-core';
 
 let chromium: any;
 try {
@@ -35,8 +36,6 @@ async function getBrowser(): Promise<Browser> {
     ignoreHTTPSErrors: true,
   };
 
-  // Puppeteer'ı dinamik olarak import et
-  const puppeteer = chromium ? require('puppeteer-core') : require('puppeteer');
   return await puppeteer.launch(options);
 }
 
