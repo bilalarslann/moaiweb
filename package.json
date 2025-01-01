@@ -1,66 +1,29 @@
 {
-  "name": "moai",
+  "name": "moaiweb",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-<<<<<<< HEAD
-    "lint": "next lint",
-    "scrape": "ts-node scripts/test-scraping.ts"
-=======
     "lint": "next lint"
->>>>>>> 387383c903d340cbd320d5ed5379e802142ba4c5
   },
   "dependencies": {
-    "@netlify/functions": "^3.0.0",
-    "@sparticuz/chromium": "^121.0.0",
-<<<<<<< HEAD
-    "@types/puppeteer": "^5.4.7",
-    "axios": "^1.7.9",
-    "chrome-aws-lambda": "^10.1.0",
-=======
-    "axios": "^1.7.9",
->>>>>>> 387383c903d340cbd320d5ed5379e802142ba4c5
-    "jsdom": "^25.0.1",
-    "next": "14.1.0",
-    "node-fetch": "^2.7.0",
-    "openai": "^4.77.0",
-<<<<<<< HEAD
-    "puppeteer": "^23.11.1",
-    "puppeteer-core": "^10.1.0",
-=======
-    "puppeteer-core": "^21.11.0",
->>>>>>> 387383c903d340cbd320d5ed5379e802142ba4c5
-    "react": "^18",
-    "react-dom": "^18"
-  },
-  "devDependencies": {
-    "@types/jsdom": "^21.1.7",
-<<<<<<< HEAD
-    "@types/node": "^20.17.10",
-=======
-    "@types/node": "^20",
->>>>>>> 387383c903d340cbd320d5ed5379e802142ba4c5
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "autoprefixer": "^10.0.1",
-    "eslint": "^8",
-    "eslint-config-next": "14.1.0",
-    "postcss": "^8",
-    "tailwindcss": "^3.3.0",
-<<<<<<< HEAD
-    "ts-node": "^10.9.2",
-    "typescript": "^5.7.2"
-  },
-  "description": "This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).",
-  "main": "next.config.js",
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
-=======
-    "typescript": "^5"
+    "@sparticuz/chromium": "^119.0.0",
+    "@types/node": "20.4.5",
+    "@types/react": "18.2.17",
+    "@types/react-dom": "18.2.7",
+    "autoprefixer": "10.4.14",
+    "axios": "^1.4.0",
+    "eslint": "8.45.0",
+    "eslint-config-next": "13.4.12",
+    "next": "13.4.12",
+    "openai": "^4.24.1",
+    "postcss": "8.4.27",
+    "puppeteer": "^21.7.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "tailwindcss": "3.3.3",
+    "typescript": "5.1.6"
   }
->>>>>>> 387383c903d340cbd320d5ed5379e802142ba4c5
 }
