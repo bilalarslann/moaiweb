@@ -1,0 +1,45 @@
+{
+  "name": "moai",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "scrape": "ts-node scripts/test-scraping.ts"
+  },
+  "dependencies": {
+    "@netlify/functions": "^3.0.0",
+    "@sparticuz/chromium": "^121.0.0",
+    "@types/puppeteer": "^5.4.7",
+    "axios": "^1.7.9",
+    "chrome-aws-lambda": "^10.1.0",
+    "jsdom": "^25.0.1",
+    "next": "14.1.0",
+    "node-fetch": "^2.7.0",
+    "openai": "^4.77.0",
+    "puppeteer": "^23.11.1",
+    "puppeteer-core": "^10.1.0",
+    "react": "^18",
+    "react-dom": "^18"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^20.17.10",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.0.1",
+    "eslint": "^8",
+    "eslint-config-next": "14.1.0",
+    "postcss": "^8",
+    "tailwindcss": "^3.3.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  },
+  "description": "This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).",
+  "main": "next.config.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
