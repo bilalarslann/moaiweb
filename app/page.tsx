@@ -1,14 +1,53 @@
 'use client';
 
 import Image from 'next/image';
+<<<<<<< HEAD
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+=======
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+>>>>>>> 387383c903d340cbd320d5ed5379e802142ba4c5
 
 export default function Home() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [currentBot, setCurrentBot] = useState(0);
+<<<<<<< HEAD
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+=======
+
+  const bots = [
+    {
+      title: "Gazeteci MOAI",
+      image: "/contents/gazeteci-moai.jpg",
+      description: "Kripto haberlerini ve piyasa verilerini anlık olarak takip eden, detaylı analizler sunan yapay zeka asistanı.",
+      href: "/gazeteci-moai",
+      icon: (
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 0 1-2.25 2.25M16.5 7.5V18a2.25 2.25 0 0 0 2.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 0 0 2.25 2.25h13.5M6 7.5h3v3H6v-3Z" />
+      ),
+      isActive: true
+    },
+    {
+      title: "Analist MOAI",
+      image: "/contents/analist-moai.jpg",
+      description: "Teknik analiz yapan, fiyat tahminleri ve trading stratejileri üreten yapay zeka asistanı. (Yakında)",
+      icon: (
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+      ),
+      isActive: false
+    },
+    {
+      title: "Trader MOAI",
+      image: "/contents/trader-moai.jpg",
+      description: "Otomatik alım-satım yapan, portföy yöneten ve risk analizi yapan yapay zeka asistanı. (Yakında)",
+      icon: (
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+      ),
+      isActive: false
+    }
+  ];
+>>>>>>> 387383c903d340cbd320d5ed5379e802142ba4c5
 
   useEffect(() => {
     const handleScroll = () => {
@@ -19,6 +58,7 @@ export default function Home() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+<<<<<<< HEAD
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       setMousePosition({ x: e.clientX, y: e.clientY });
@@ -45,6 +85,8 @@ export default function Home() {
     return { size, opacity };
   };
 
+=======
+>>>>>>> 387383c903d340cbd320d5ed5379e802142ba4c5
   const nextBot = () => {
     setCurrentBot((prev) => (prev + 1) % bots.length);
   };
@@ -53,6 +95,7 @@ export default function Home() {
     setCurrentBot((prev) => (prev - 1 + bots.length) % bots.length);
   };
 
+<<<<<<< HEAD
   const bots = [
     {
       title: "Journalist MOAI",
@@ -115,6 +158,10 @@ export default function Home() {
         />
       </div>
 
+=======
+  return (
+    <main className="min-h-screen bg-black text-white overflow-x-hidden">
+>>>>>>> 387383c903d340cbd320d5ed5379e802142ba4c5
       {/* Header */}
       <header className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${isScrolled ? 'bg-black/80 backdrop-blur-sm' : 'bg-transparent'}`}>
         <div className="container mx-auto px-4">
@@ -159,6 +206,7 @@ export default function Home() {
                 YouTube
                 <span className="absolute -bottom-1 left-0 w-0 h-px bg-white transition-all duration-300 group-hover:w-full"></span>
               </a>
+<<<<<<< HEAD
               <a href="#disclaimer" 
                 className="text-gray-400 hover:text-white font-light relative group">
                 Disclaimer
@@ -196,6 +244,36 @@ export default function Home() {
               </div>
             </div>
           </nav>
+=======
+            </div>
+          </nav>
+
+          {/* Mobile Navigation */}
+          <div className={`md:hidden transition-all duration-300 ${isMenuOpen ? 'max-h-screen opacity-100' : 'max-h-0 opacity-0'} overflow-hidden bg-black/95`}>
+            <div className="py-4 space-y-4">
+              <a href="https://t.me/moaigents" target="_blank" rel="noopener noreferrer" 
+                className="block px-4 py-2 text-gray-400 hover:text-white font-light">
+                Telegram
+              </a>
+              <a href="https://x.com/moAI_Agent" target="_blank" rel="noopener noreferrer" 
+                className="block px-4 py-2 text-gray-400 hover:text-white font-light">
+                X
+              </a>
+              <a href="https://dexscreener.com/solana/2GbE1pq8GiwpHhdGWKUBLXJfBKvKLoNWe1E4KPtbED2M" target="_blank" rel="noopener noreferrer" 
+                className="block px-4 py-2 text-gray-400 hover:text-white font-light">
+                Dexscreener
+              </a>
+              <a href="https://medium.com/@6emirsahin/moai-i%CC%87lk-yapay-zeka-kripto-fenomeni-ve-ki%C5%9Fisel-yat%C4%B1r%C4%B1m-analisti-ada9eab498a5" target="_blank" rel="noopener noreferrer" 
+                className="block px-4 py-2 text-gray-400 hover:text-white font-light">
+                Roadmap
+              </a>
+              <a href="https://www.youtube.com/@moaidirector" target="_blank" rel="noopener noreferrer" 
+                className="block px-4 py-2 text-gray-400 hover:text-white font-light">
+                YouTube
+              </a>
+            </div>
+          </div>
+>>>>>>> 387383c903d340cbd320d5ed5379e802142ba4c5
         </div>
       </header>
 
@@ -220,6 +298,7 @@ export default function Home() {
 
             {/* Large MOAI Image */}
             <div className="hidden md:block absolute right-[-30%] h-screen w-[120%] top-0">
+<<<<<<< HEAD
               <div className="relative w-full h-full">
                 <Image
                   src="/moai.webp"
@@ -241,6 +320,25 @@ export default function Home() {
                   priority
                 />
               </div>
+=======
+              <Image
+                src="/moai.webp"
+                alt="MOAI"
+                fill
+                className="object-contain"
+                priority
+              />
+            </div>
+            {/* Mobile MOAI Image */}
+            <div className="relative md:hidden w-full h-[60vh] mb-8">
+              <Image
+                src="/moai.webp"
+                alt="MOAI"
+                fill
+                className="object-contain"
+                priority
+              />
+>>>>>>> 387383c903d340cbd320d5ed5379e802142ba4c5
             </div>
           </div>
         </div>
@@ -252,12 +350,17 @@ export default function Home() {
           {bots.map((bot, index) => (
             <div key={index} className={`${!bot.isActive ? 'opacity-50 cursor-not-allowed' : ''}`}>
               {bot.isActive ? (
+<<<<<<< HEAD
                 <a href={bot.href} className="block group">
                   <div className={`bg-gray-800/50 backdrop-blur-sm p-6 rounded-2xl border transition-all duration-300 shadow-lg ${
                     bot.title === "Analyst MOAI" 
                       ? "border-purple-900/30 hover:border-purple-500/50 hover:shadow-purple-500/20"
                       : "border-blue-900/30 hover:border-blue-500/50 hover:shadow-blue-500/10"
                   }`}>
+=======
+                <Link href={bot.href || '#'} className="block group">
+                  <div className="bg-gray-800/50 backdrop-blur-sm p-6 rounded-2xl border border-blue-900/30 hover:border-blue-500/50 transition-all duration-300 shadow-lg hover:shadow-blue-500/10">
+>>>>>>> 387383c903d340cbd320d5ed5379e802142ba4c5
                     <div className="relative aspect-square w-full mb-6 rounded-xl overflow-hidden">
                       <Image
                         src={bot.image}
@@ -267,6 +370,7 @@ export default function Home() {
                       />
                     </div>
                     <div className="flex items-center gap-4 mb-4">
+<<<<<<< HEAD
                       <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
                         bot.title === "Analyst MOAI"
                           ? "bg-purple-600/20"
@@ -285,12 +389,24 @@ export default function Home() {
                           ? "text-purple-300"
                           : "text-blue-300"
                       }`}>{bot.title}</h2>
+=======
+                      <div className="w-12 h-12 rounded-full bg-blue-600/20 flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-blue-400">
+                          {bot.icon}
+                        </svg>
+                      </div>
+                      <h2 className="text-xl font-semibold text-blue-300">{bot.title}</h2>
+>>>>>>> 387383c903d340cbd320d5ed5379e802142ba4c5
                     </div>
                     <p className="text-gray-400">
                       {bot.description}
                     </p>
                   </div>
+<<<<<<< HEAD
                 </a>
+=======
+                </Link>
+>>>>>>> 387383c903d340cbd320d5ed5379e802142ba4c5
               ) : (
                 <div className="bg-gray-800/50 backdrop-blur-sm p-6 rounded-2xl border border-blue-900/30 transition-all duration-300 shadow-lg">
                   <div className="relative aspect-square w-full mb-6 rounded-xl overflow-hidden">
@@ -326,6 +442,7 @@ export default function Home() {
             {bots.map((bot, index) => (
               <div key={index} className="w-full flex-shrink-0 px-4">
                 <div className={`${!bot.isActive ? 'opacity-50 cursor-not-allowed' : 'group'}`}>
+<<<<<<< HEAD
                   {bot.isActive ? (
                     <Link href={bot.href || '#'} className="block">
                       <div className={`bg-gray-800/50 backdrop-blur-sm p-6 rounded-2xl border transition-all duration-300 shadow-lg ${
@@ -389,6 +506,29 @@ export default function Home() {
                       </p>
                     </div>
                   )}
+=======
+                  <div className="bg-gray-800/50 backdrop-blur-sm p-6 rounded-2xl border border-blue-900/30 hover:border-blue-500/50 transition-all duration-300 shadow-lg hover:shadow-blue-500/10">
+                    <div className="relative aspect-square w-full mb-6 rounded-xl overflow-hidden">
+                      <Image
+                        src={bot.image}
+                        alt={bot.title}
+                        fill
+                        className="object-contain"
+                      />
+                    </div>
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="w-12 h-12 rounded-full bg-blue-600/20 flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-blue-400">
+                          {bot.icon}
+                        </svg>
+                      </div>
+                      <h2 className="text-xl font-semibold text-blue-300">{bot.title}</h2>
+                    </div>
+                    <p className="text-gray-400">
+                      {bot.description}
+                    </p>
+                  </div>
+>>>>>>> 387383c903d340cbd320d5ed5379e802142ba4c5
                 </div>
               </div>
             ))}
@@ -416,6 +556,7 @@ export default function Home() {
         </button>
       </div>
 
+<<<<<<< HEAD
       {/* Disclaimer Section */}
       <div id="disclaimer" className="container mx-auto px-4 py-16">
         <h2 className="text-3xl font-bold text-center mb-12">Disclaimer</h2>
@@ -446,6 +587,11 @@ export default function Home() {
       {/* Footer */}
       <footer className="container mx-auto px-4 py-8 text-center text-gray-400">
         <p>© 2024 MOAI AI. All rights reserved.</p>
+=======
+      {/* Footer */}
+      <footer className="container mx-auto px-4 py-8 text-center text-gray-400">
+        <p>© 2024 MOAI AI. Tüm hakları saklıdır.</p>
+>>>>>>> 387383c903d340cbd320d5ed5379e802142ba4c5
       </footer>
     </main>
   );

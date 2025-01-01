@@ -3,8 +3,16 @@
   publish = ".next"
 
 [functions]
+<<<<<<< HEAD
   external_node_modules = ["axios", "jsdom"]
   node_bundler = "esbuild"
+=======
+  directory = "netlify/functions"
+
+[functions."*"]
+  node_bundler = "esbuild"
+  external_node_modules = ["chrome-aws-lambda", "puppeteer-core", "puppeteer"]
+>>>>>>> 387383c903d340cbd320d5ed5379e802142ba4c5
 
 [[redirects]]
   from = "/api/news"
