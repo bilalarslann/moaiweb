@@ -4,7 +4,7 @@
   publish = ".next"
 
 [functions]
-  external_node_modules = ["@sparticuz/chromium"]
+  external_node_modules = ["@sparticuz/chromium", "axios", "jsdom"]
   node_bundler = "esbuild"
   included_files = ["node_modules/@sparticuz/chromium-*/**"]
 
