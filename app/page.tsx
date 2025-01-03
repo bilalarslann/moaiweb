@@ -3,29 +3,15 @@
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import React from 'react';
 
 export default function Home() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [currentBot, setCurrentBot] = useState(0);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-
-  const bots = [
-    {
-      title: "Journalist MOAI",
-      description: "AI assistant that tracks crypto news and market data in real-time, providing detailed analysis.",
-      image: "/gazeteci-moai.png",
-      link: "/gazeteci-moai",
-      isActive: true
-    },
-    {
-      title: "Analyst MOAI",
-      description: "AI assistant that performs technical analysis, generates price predictions and trading strategies.",
-      image: "/analist-moai.png",
-      link: "/analist-moai",
-      isActive: false
-    }
-  ];
+  const [glowPosition, setGlowPosition] = useState({ x: 855, y: 152 });
+  const [glowPosition2, setGlowPosition2] = useState({ x: 752, y: 167 });
 
   useEffect(() => {
     const handleScroll = () => {
@@ -45,24 +31,33 @@ export default function Home() {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  const calculateGlowStyle = (botIndex: number) => {
-    const botElement = document.querySelector(`#bot-${botIndex}`);
-    if (!botElement) return { size: 0, opacity: 0 };
+  const calculateDistance = () => {
+    const dx1 = mousePosition.x - glowPosition.x;
+    const dy1 = mousePosition.y - glowPosition.y;
+    const dx2 = mousePosition.x - glowPosition2.x;
+    const dy2 = mousePosition.y - glowPosition2.y;
+    
+    const distance1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+    const distance2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+    
+    return Math.min(distance1, distance2);
+  };
 
-    const rect = botElement.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
+  const getGlowStyle = (position: { x: number, y: number }) => {
+    const distance = calculateDistance();
+    const maxDistance = 800;
+    const minSize = 13;
+    const maxSize = 140;
+    const minOpacity = 0.1;
+    const maxOpacity = 0.7;
 
-    const distance = Math.sqrt(
-      Math.pow(mousePosition.x - centerX, 2) + 
-      Math.pow(mousePosition.y - centerY, 2)
-    );
+    const intensity = Math.max(0, 1 - distance / maxDistance);
+    const size = minSize + (maxSize - minSize) * intensity;
+    const opacity = minOpacity + (maxOpacity - minOpacity) * intensity;
 
-    const maxDistance = 300;
-    const size = Math.max(0, 1 - distance / maxDistance);
-    const opacity = size * 0.5;
-
-    return { size, opacity };
+    return {
+      background: `radial-gradient(${size}px circle at ${position.x}px ${position.y}px, rgba(190, 229, 228, ${opacity}), transparent 100%)`,
+    };
   };
 
   const nextBot = () => {
@@ -73,144 +68,72 @@ export default function Home() {
     setCurrentBot((prev) => (prev - 1 + bots.length) % bots.length);
   };
 
+  const bots = [
+    {
+      title: "Journalist MOAI",
+      image: "/contents/gazeteci-moai.jpg",
+      description: "AI assistant that tracks crypto news and market data in real-time, providing detailed analysis.",
+      href: "/journalist-moai",
+      icon: (
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 0 1-2.25 2.25M16.5 7.5V18a2.25 2.25 0 0 0 2.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 0 0 2.25 2.25h13.5M6 7.5h3v3H6v-3Z" />
+      ),
+    },
+    {
+      title: "Analyst MOAI",
+      image: "/contents/analist-moai.jpg",
+      description: "AI assistant that performs technical analysis, generates price predictions and trading strategies.",
+      href: "/analyst-moai",
+      icon: (
+        <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" />
+      ),
+    }
+  ];
+
   return (
-    <main className="min-h-screen bg-black text-white overflow-x-hidden relative">
-      {/* Header */}
-      <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? 'bg-black/80 backdrop-blur-lg shadow-lg shadow-black/20' : ''}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo */}
-            <div className="flex items-center space-x-4">
-              <Image src="/moai.png" alt="MOAI AI" width={40} height={40} className="rounded-lg" />
-              <div>
-                <h1 className="text-xl font-bold">MOAI AI</h1>
-                <p className="text-sm text-blue-300/80">Crypto Assistants</p>
-              </div>
-            </div>
-
-            {/* Navigation */}
-            <nav className="hidden md:flex space-x-8">
-              <Link href="#disclaimer" className="text-gray-300 hover:text-white transition-colors">
-                Disclaimer
-              </Link>
-            </nav>
-
-            {/* Mobile Menu Button */}
-            <button
-              className="md:hidden p-2 rounded-lg hover:bg-white/10 transition-colors"
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-            >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                {isMenuOpen ? (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                ) : (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 6h16M4 12h16M4 18h16"
-                  />
-                )}
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile Menu */}
-        {isMenuOpen && (
-          <div className="md:hidden">
-            <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-              <Link href="#disclaimer" className="block px-3 py-2 text-gray-300 hover:text-white transition-colors">
-                Disclaimer
-              </Link>
-            </div>
-          </div>
-        )}
-      </header>
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 pb-16">
-        <div className="text-center mb-16">
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-blue-400 to-purple-600 text-transparent bg-clip-text">
-            Welcome to MOAI AI
-          </h1>
-          <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            Your intelligent crypto companion powered by advanced AI technology.
-          </p>
-        </div>
-
-        {/* Bot Cards */}
-        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-          {bots.map((bot, index) => (
-            <Link
-              key={index}
-              href={bot.link}
-              id={`bot-${index}`}
-              className={`group relative bg-gradient-to-br ${
-                index === 0
-                  ? 'from-blue-900/20 to-blue-800/20 hover:from-blue-900/30 hover:to-blue-800/30'
-                  : 'from-purple-900/20 to-purple-800/20 hover:from-purple-900/30 hover:to-purple-800/30'
-              } rounded-2xl p-6 transition-all duration-300 backdrop-blur-sm border border-white/10 hover:border-white/20`}
-            >
-              <div className="flex items-center space-x-4 mb-4">
-                <Image
-                  src={bot.image}
-                  alt={bot.title}
-                  width={60}
-                  height={60}
-                  className="rounded-xl"
-                />
-                <div>
-                  <h2 className="text-xl font-bold">{bot.title}</h2>
-                  <p className="text-sm text-blue-300/80">AI Assistant</p>
-                </div>
-              </div>
-              <p className="text-gray-400">{bot.description}</p>
-            </Link>
-          ))}
-        </div>
-
-        {/* Disclaimer Section */}
-        <div id="disclaimer" className="mt-32">
-          <h2 className="text-3xl font-bold text-center mb-12">Disclaimer</h2>
-          <div className="grid md:grid-cols-2 gap-8">
-            {/* Not Financial Advice */}
-            <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 rounded-2xl p-6 backdrop-blur-sm border border-white/10">
-              <h3 className="text-xl font-bold mb-4">Not Financial Advice</h3>
-              <p className="text-gray-400">
-                The information provided by MOAI AI is for general information and educational purposes only. It should not be considered as financial advice. Always conduct your own research and consult with qualified financial advisors before making any investment decisions.
-              </p>
-            </div>
-
-            {/* Nature of MoAI Agent's Content */}
-            <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 rounded-2xl p-6 backdrop-blur-sm border border-white/10">
-              <h3 className="text-xl font-bold mb-4">Nature of MoAI Agent's Content</h3>
-              <p className="text-gray-400">
-                MOAI AI uses advanced language models and data analysis to provide insights and information. While we strive for accuracy, the content generated is based on available data and should be verified independently. Market conditions are volatile and past performance does not guarantee future results.
-              </p>
-            </div>
-          </div>
-        </div>
+    <main className="flex min-h-screen flex-col items-center justify-between p-24">
+      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
+        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
+          Welcome to MOAI AI - Your Crypto Intelligence Assistant
+        </p>
       </div>
 
-      {/* Footer */}
-      <footer className="bg-black/50 backdrop-blur-sm border-t border-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center text-gray-400">
-            <p>© 2024 MOAI AI. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      <div className="relative flex place-items-center">
+        <div className="absolute top-0 left-0 w-full h-full" style={getGlowStyle(glowPosition)} />
+        <div className="absolute top-0 left-0 w-full h-full" style={getGlowStyle(glowPosition2)} />
+        <Image
+          src="/moai.webp"
+          alt="MOAI Logo"
+          width={180}
+          height={180}
+          priority
+          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
+        />
+      </div>
+
+      <div className="grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-2 lg:text-left gap-8">
+        {bots.map((bot, index) => (
+          <Link
+            key={index}
+            href={bot.href}
+            className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
+          >
+            <div className="flex items-center mb-3">
+              <svg
+                className="w-6 h-6 mr-2 text-blue-500"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
+                {bot.icon}
+              </svg>
+              <h2 className="text-2xl font-semibold">{bot.title}</h2>
+            </div>
+            <p className="m-0 max-w-[30ch] text-sm opacity-50">{bot.description}</p>
+          </Link>
+        ))}
+      </div>
     </main>
   );
-} 
+}

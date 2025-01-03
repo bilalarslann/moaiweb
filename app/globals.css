@@ -37,21 +37,34 @@ body {
 
 @keyframes glow {
   0%, 100% {
-    text-shadow: 0 0 30px rgba(255, 255, 255, 0.5),
-                 0 0 60px rgba(255, 255, 255, 0.3),
-                 0 0 90px rgba(255, 255, 255, 0.2),
-                 0 0 120px rgba(255, 255, 255, 0.1);
+    text-shadow: 0 0 50px rgba(255, 255, 255, 0.5),
+                 0 0 100px rgba(255, 255, 255, 0.3),
+                 0 0 150px rgba(255, 255, 255, 0.2),
+                 0 0 200px rgba(255, 255, 255, 0.1);
   }
   50% {
-    text-shadow: 0 0 40px rgba(255, 255, 255, 0.8),
-                 0 0 80px rgba(255, 255, 255, 0.5),
-                 0 0 120px rgba(255, 255, 255, 0.3),
-                 0 0 160px rgba(255, 255, 255, 0.2);
+    text-shadow: 0 0 60px rgba(255, 255, 255, 0.8),
+                 0 0 120px rgba(255, 255, 255, 0.5),
+                 0 0 180px rgba(255, 255, 255, 0.3),
+                 0 0 240px rgba(255, 255, 255, 0.2);
   }
 }
 
 .animate-glow {
   animation: glow 3s ease-in-out infinite;
+}
+
+@keyframes highlight {
+  0% {
+    background-color: rgba(147, 51, 234, 0.2);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.highlight-message {
+  animation: highlight 2s ease-out;
 }
 
 * {
