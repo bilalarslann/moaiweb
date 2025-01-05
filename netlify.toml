@@ -1,25 +1,11 @@
 [build]
   command = "npm run build"
   publish = ".next"
-  functions = "netlify/functions"
-
-[build.environment]
-  CHROME_EXECUTABLE_PATH = "/var/task/node_modules/@sparticuz/chromium/bin"
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["@sparticuz/chromium"]
-  included_files = ["node_modules/@sparticuz/chromium/**/*"]
 
-[functions.scrape-news]
-  memory = 1024
-  timeout = "30 seconds"
-
-[[redirects]]
-  from = "/api/scrape"
-  to = "/.netlify/functions/scrape-news"
-  status = 200
-  force = true
-
-[[plugins]]
-  package = "@netlify/plugin-nextjs" 
+[functions.scrape]
+  included_files = ["node_modules/@sparticuz/chromium/**"]
+  memory = 2048
+  timeout = 30 

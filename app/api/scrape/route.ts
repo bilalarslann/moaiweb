@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       : process.env.CHROME_PATH || '/usr/bin/google-chrome';
 
     browser = await puppeteer.launch({
-      headless: chromium.headless,
+      headless: true,
       executablePath,
       args: isProduction ? chromium.args : ['--no-sandbox'],
       defaultViewport: chromium.defaultViewport,
@@ -35,21 +35,12 @@ export async function POST(request: Request) {
     
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
     
-    await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => false });
-    });
-
     console.log('Fetching news for query:', searchQuery);
     await page.goto(`https://cryptopanic.com/news?search=${encodeURIComponent(searchQuery)}`, {
-      waitUntil: 'networkidle0',
-      timeout: 30000
+      waitUntil: 'domcontentloaded',
+      timeout: 8000
     });
 
-    await new Promise(resolve => setTimeout(resolve, 5000));
-
-    await page.evaluate(() => {
-      window.scrollBy(0, window.innerHeight);
-    });
     await new Promise(resolve => setTimeout(resolve, 2000));
 
     const newsItems: NewsItem[] = [];
@@ -57,10 +48,8 @@ export async function POST(request: Request) {
     // Get all the links first
     const titleElements = await page.$$('.title-text');
     const newsLinks = await Promise.all(
-      titleElements.slice(0, 5).map(async (el: any) => {
-        // Get the main title text without the source name
+      titleElements.slice(0, 3).map(async (el: any) => {
         const title = await el.evaluate((node: Element) => {
-          // Get only the direct text content, excluding the source name element
           const sourceElement = node.querySelector('.si-source-name');
           if (sourceElement) {
             sourceElement.remove();
@@ -75,17 +64,15 @@ export async function POST(request: Request) {
     // Now visit each link and get the content
     for (const { title, cryptopanicLink } of newsLinks) {
       try {
-        await page.goto(cryptopanicLink, { waitUntil: 'networkidle0', timeout: 30000 });
-        await page.waitForSelector('.description-body', { timeout: 10000 });
+        await page.goto(cryptopanicLink, { waitUntil: 'domcontentloaded', timeout: 8000 });
         
         // Get the content
-        const contentElements = await page.$$('.description-body p');
-        const contentParts = await Promise.all(
-          contentElements.map((el: any) => el.evaluate((node: Element) => node.textContent || ''))
-        );
-        const content = contentParts.join('\n');
+        const content = await page.evaluate(() => {
+          const paragraphs = Array.from(document.querySelectorAll('.description-body p'));
+          return paragraphs.map(p => p.textContent || '').join('\n');
+        });
 
-        // Get the source URL and text from post-source-link
+        // Get the source URL and text
         const sourceInfo = await page.evaluate(() => {
           const sourceLink = document.querySelector('.post-source-link');
           if (!sourceLink) return null;
