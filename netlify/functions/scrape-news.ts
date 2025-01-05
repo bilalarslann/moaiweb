@@ -1,7 +1,15 @@
-import chromium from 'chrome-aws-lambda';
 import { Handler } from '@netlify/functions';
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 
-export const handler: Handler = async (event) => {
+interface NewsItem {
+  title: string;
+  content: string;
+  sourceText: string;
+  sourceUrl: string;
+}
+
+const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
@@ -9,98 +17,105 @@ export const handler: Handler = async (event) => {
     };
   }
 
-  try {
-    const { searchQuery, context } = JSON.parse(event.body || '{}');
-    
-    if (!searchQuery) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: 'Search query is required' })
-      };
-    }
+  const { searchQuery } = JSON.parse(event.body || '{}');
+  let browser;
 
-    // Launch browser with AWS Lambda specific settings
-    const browser = await chromium.puppeteer.launch({
+  try {
+    console.log('Launching browser...');
+    
+    browser = await puppeteer.launch({
+      headless: true,
+      executablePath: await chromium.executablePath(),
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath,
-      headless: true,
       ignoreHTTPSErrors: true
     });
 
     const page = await browser.newPage();
     
-    // Set longer timeout for navigation
-    page.setDefaultNavigationTimeout(30000);
-
-    // Navigate to CoinDesk search
-    await page.goto(`https://www.coindesk.com/search?s=${encodeURIComponent(searchQuery)}`);
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
     
-    // Wait for news items to load
-    await page.waitForSelector('article', { timeout: 10000 });
-
-    // Extract news data
-    const newsData = await page.evaluate(() => {
-      const articles = document.querySelectorAll('article');
-      return Array.from(articles).slice(0, 5).map(article => {
-        const titleElement = article.querySelector('h6');
-        const dateElement = article.querySelector('time');
-        const linkElement = article.querySelector('a');
-        
-        return {
-          title: titleElement?.textContent?.trim() || '',
-          date: dateElement?.getAttribute('datetime') || '',
-          content: '', // We'll get content from individual article pages
-          sourceUrl: linkElement?.href || '',
-          sourceText: 'CoinDesk'
-        };
-      });
+    console.log('Fetching news for query:', searchQuery);
+    await page.goto(`https://cryptopanic.com/news?search=${encodeURIComponent(searchQuery)}`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 8000
     });
 
-    // Get content for each article
-    for (let news of newsData) {
-      if (news.sourceUrl) {
-        try {
-          await page.goto(news.sourceUrl, { waitUntil: 'networkidle0' });
-          const content = await page.evaluate(() => {
-            const articleBody = document.querySelector('.article-body-text');
-            if (articleBody) {
-              const paragraphs = articleBody.querySelectorAll('p');
-              return Array.from(paragraphs)
-                .slice(0, 3)
-                .map(p => p.textContent?.trim())
-                .filter(Boolean)
-                .join('\n\n');
-            }
-            return '';
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const newsItems: NewsItem[] = [];
+    
+    // Get all the links first
+    const titleElements = await page.$$('.title-text');
+    const newsLinks = await Promise.all(
+      titleElements.slice(0, 3).map(async (el: any) => {
+        const title = await el.evaluate((node: Element) => {
+          const sourceElement = node.querySelector('.si-source-name');
+          if (sourceElement) {
+            sourceElement.remove();
+          }
+          return node.textContent || '';
+        });
+        const cryptopanicLink = await el.evaluate((node: Element) => (node.closest('a') as HTMLAnchorElement).href);
+        return { title, cryptopanicLink };
+      })
+    );
+
+    // Now visit each link and get the content
+    for (const { title, cryptopanicLink } of newsLinks) {
+      try {
+        await page.goto(cryptopanicLink, { waitUntil: 'domcontentloaded', timeout: 8000 });
+        
+        // Get the content
+        const content = await page.evaluate(() => {
+          const paragraphs = Array.from(document.querySelectorAll('.description-body p'));
+          return paragraphs.map(p => p.textContent || '').join('\n');
+        });
+
+        // Get the source URL and text
+        const sourceInfo = await page.evaluate(() => {
+          const sourceLink = document.querySelector('.post-source-link');
+          if (!sourceLink) return null;
+          
+          const text = sourceLink.textContent || '';
+          return {
+            text: text,
+            url: `https://${text}`
+          };
+        });
+
+        if (title && content && sourceInfo) {
+          newsItems.push({
+            title: title.trim(),
+            content: content.trim(),
+            sourceText: sourceInfo.text.trim(),
+            sourceUrl: sourceInfo.url
           });
-          news.content = content;
-        } catch (error) {
-          console.error(`Error fetching article content: ${error}`);
-          news.content = 'Content not available';
+          console.log(`Successfully added article: ${title}`);
         }
+      } catch (err) {
+        console.error(`Error processing article: ${title}`, err);
+        continue;
       }
     }
 
-    await browser.close();
-
-    // Filter out articles with empty content
-    const validNews = newsData.filter(news => news.title && news.content);
-
+    console.log(`Successfully scraped ${newsItems.length} news items`);
     return {
       statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      },
-      body: JSON.stringify(validNews)
+      body: JSON.stringify(newsItems)
     };
 
-  } catch (error) {
-    console.error('Scraping error:', error);
+  } catch (err: any) {
+    console.error('Error scraping CryptoPanic:', err.message);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to scrape news' })
+      body: JSON.stringify({ error: err.message })
     };
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
   }
-}; 
+};
+
+export { handler }; 
