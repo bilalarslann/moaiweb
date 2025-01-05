@@ -32,77 +32,83 @@ const handler: Handler = async (event) => {
     });
 
     const page = await browser.newPage();
-    
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+    await page.setDefaultNavigationTimeout(5000);
     
     console.log('Fetching news for query:', searchQuery);
     await page.goto(`https://cryptopanic.com/news?search=${encodeURIComponent(searchQuery)}`, {
       waitUntil: 'domcontentloaded',
-      timeout: 8000
+      timeout: 5000
     });
 
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    const newsItems: NewsItem[] = [];
-    
-    // Get all the links first
-    const titleElements = await page.$$('.title-text');
-    const newsLinks = await Promise.all(
-      titleElements.slice(0, 3).map(async (el: any) => {
-        const title = await el.evaluate((node: Element) => {
-          const sourceElement = node.querySelector('.si-source-name');
-          if (sourceElement) {
-            sourceElement.remove();
-          }
-          return node.textContent || '';
-        });
-        const cryptopanicLink = await el.evaluate((node: Element) => (node.closest('a') as HTMLAnchorElement).href);
-        return { title, cryptopanicLink };
-      })
-    );
-
-    // Now visit each link and get the content
-    for (const { title, cryptopanicLink } of newsLinks) {
-      try {
-        await page.goto(cryptopanicLink, { waitUntil: 'domcontentloaded', timeout: 8000 });
+    // Extract all data in a single page evaluation to minimize browser interactions
+    const newsItems = await page.evaluate(() => {
+      const items = [];
+      const titleElements = document.querySelectorAll('.title-text');
+      
+      for (let i = 0; i < Math.min(3, titleElements.length); i++) {
+        const titleEl = titleElements[i];
+        const sourceEl = titleEl.querySelector('.si-source-name');
+        const linkEl = titleEl.closest('a');
         
-        // Get the content
-        const content = await page.evaluate(() => {
+        if (titleEl && linkEl) {
+          // Remove source element temporarily to get clean title
+          if (sourceEl) sourceEl.remove();
+          
+          const title = titleEl.textContent?.trim() || '';
+          const link = linkEl.href;
+          const sourceText = sourceEl?.textContent?.trim() || '';
+          
+          if (title && link) {
+            items.push({
+              title,
+              content: 'Loading...',
+              sourceText,
+              sourceUrl: `https://${sourceText}`,
+              link
+            });
+          }
+        }
+      }
+      return items;
+    });
+
+    // Get content for each article in parallel
+    const contentPromises = newsItems.map(async (item) => {
+      try {
+        const newPage = await browser.newPage();
+        await newPage.setDefaultNavigationTimeout(5000);
+        
+        await newPage.goto(item.link, {
+          waitUntil: 'domcontentloaded',
+          timeout: 5000
+        });
+
+        const content = await newPage.evaluate(() => {
           const paragraphs = Array.from(document.querySelectorAll('.description-body p'));
           return paragraphs.map(p => p.textContent || '').join('\n');
         });
 
-        // Get the source URL and text
-        const sourceInfo = await page.evaluate(() => {
-          const sourceLink = document.querySelector('.post-source-link');
-          if (!sourceLink) return null;
-          
-          const text = sourceLink.textContent || '';
-          return {
-            text: text,
-            url: `https://${text}`
-          };
-        });
-
-        if (title && content && sourceInfo) {
-          newsItems.push({
-            title: title.trim(),
-            content: content.trim(),
-            sourceText: sourceInfo.text.trim(),
-            sourceUrl: sourceInfo.url
-          });
-          console.log(`Successfully added article: ${title}`);
-        }
+        await newPage.close();
+        return content;
       } catch (err) {
-        console.error(`Error processing article: ${title}`, err);
-        continue;
+        console.error(`Error fetching content for ${item.title}:`, err);
+        return 'Content not available';
       }
-    }
+    });
 
-    console.log(`Successfully scraped ${newsItems.length} news items`);
+    const contents = await Promise.all(contentPromises);
+    
+    const finalNewsItems = newsItems.map((item, index) => ({
+      title: item.title,
+      content: contents[index],
+      sourceText: item.sourceText,
+      sourceUrl: item.sourceUrl
+    }));
+
+    console.log(`Successfully scraped ${finalNewsItems.length} news items`);
     return {
       statusCode: 200,
-      body: JSON.stringify(newsItems)
+      body: JSON.stringify(finalNewsItems)
     };
 
   } catch (err: any) {
