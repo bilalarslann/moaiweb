@@ -5,6 +5,7 @@
 [build.environment]
   NEXT_PUBLIC_API_URL = "https://moaiagent.netlify.app"
   NODE_ENV = "production"
+  NEXT_TELEMETRY_DISABLED = "1"
 
 [[redirects]]
   from = "/*"
