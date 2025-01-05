@@ -16,12 +16,18 @@ export async function POST(request: Request) {
   try {
     console.log('Launching browser...');
     
-    const executablePath = process.env.CHROME_EXECUTABLE_PATH || await chromium.executablePath();
+    // Check if we're in production (Netlify) or development
+    const isProduction = process.env.NETLIFY === 'true';
     
+    const executablePath = isProduction 
+      ? await chromium.executablePath()
+      : process.env.CHROME_PATH || '/usr/bin/google-chrome';
+
     browser = await puppeteer.launch({
-      headless: true,
+      headless: chromium.headless,
       executablePath,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: isProduction ? chromium.args : ['--no-sandbox'],
+      defaultViewport: chromium.defaultViewport,
       ignoreHTTPSErrors: true
     });
 
@@ -36,22 +42,22 @@ export async function POST(request: Request) {
     console.log('Fetching news for query:', searchQuery);
     await page.goto(`https://cryptopanic.com/news?search=${encodeURIComponent(searchQuery)}`, {
       waitUntil: 'networkidle0',
-      timeout: 60000
+      timeout: 30000
     });
 
-    await new Promise(resolve => setTimeout(resolve, 10000));
+    await new Promise(resolve => setTimeout(resolve, 5000));
 
     await page.evaluate(() => {
       window.scrollBy(0, window.innerHeight);
     });
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     const newsItems: NewsItem[] = [];
     
     // Get all the links first
     const titleElements = await page.$$('.title-text');
     const newsLinks = await Promise.all(
-      titleElements.slice(0, 5).map(async (el) => {
+      titleElements.slice(0, 5).map(async (el: any) => {
         // Get the main title text without the source name
         const title = await el.evaluate((node: Element) => {
           // Get only the direct text content, excluding the source name element
@@ -69,13 +75,13 @@ export async function POST(request: Request) {
     // Now visit each link and get the content
     for (const { title, cryptopanicLink } of newsLinks) {
       try {
-        await page.goto(cryptopanicLink, { waitUntil: 'networkidle0', timeout: 60000 });
-        await page.waitForSelector('.description-body', { timeout: 20000 });
+        await page.goto(cryptopanicLink, { waitUntil: 'networkidle0', timeout: 30000 });
+        await page.waitForSelector('.description-body', { timeout: 10000 });
         
         // Get the content
         const contentElements = await page.$$('.description-body p');
         const contentParts = await Promise.all(
-          contentElements.map(el => el.evaluate((node: Element) => node.textContent || ''))
+          contentElements.map((el: any) => el.evaluate((node: Element) => node.textContent || ''))
         );
         const content = contentParts.join('\n');
 
@@ -87,7 +93,7 @@ export async function POST(request: Request) {
           const text = sourceLink.textContent || '';
           return {
             text: text,
-            url: `https://${text}` // Direkt domain adını URL olarak kullan
+            url: `https://${text}`
           };
         });
 

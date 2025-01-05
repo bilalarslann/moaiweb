@@ -1,13 +1,5 @@
-import chromium from '@sparticuz/chromium';
-import puppeteer from 'puppeteer-core';
+import chromium from 'chrome-aws-lambda';
 import { Handler } from '@netlify/functions';
-
-interface NewsItem {
-  title: string;
-  content: string;
-  sourceText: string;
-  sourceUrl: string;
-}
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -17,7 +9,6 @@ export const handler: Handler = async (event) => {
     };
   }
 
-  let browser;
   try {
     const { searchQuery, context } = JSON.parse(event.body || '{}');
     
@@ -28,115 +19,73 @@ export const handler: Handler = async (event) => {
       };
     }
 
-    // Initialize chromium
-    await chromium.font('https://raw.githack.com/googlei18n/noto-emoji/master/fonts/NotoColorEmoji.ttf');
-    
-    // Launch browser with Netlify specific settings
-    browser = await puppeteer.launch({
-      args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
+    // Launch browser with AWS Lambda specific settings
+    const browser = await chromium.puppeteer.launch({
+      args: chromium.args,
       defaultViewport: chromium.defaultViewport,
-      executablePath: process.env.CHROME_EXECUTABLE_PATH || await chromium.executablePath(),
+      executablePath: await chromium.executablePath,
       headless: true,
       ignoreHTTPSErrors: true
     });
 
     const page = await browser.newPage();
     
-    // Set user agent and disable webdriver
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
-    await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => false });
-    });
-    
-    console.log('Navigating to CryptoPanic...');
-    
-    // Navigate to CryptoPanic search
-    await page.goto(`https://cryptopanic.com/news?search=${encodeURIComponent(searchQuery)}`, {
-      waitUntil: 'networkidle0',
-      timeout: 30000
-    });
+    // Set longer timeout for navigation
+    page.setDefaultNavigationTimeout(30000);
 
-    console.log('Waiting for content to load...');
+    // Navigate to CoinDesk search
+    await page.goto(`https://www.coindesk.com/search?s=${encodeURIComponent(searchQuery)}`);
     
-    // Wait for content to load
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    // Wait for news items to load
+    await page.waitForSelector('article', { timeout: 10000 });
 
-    // Scroll down to load more content
-    await page.evaluate(() => {
-      window.scrollBy(0, window.innerHeight);
-    });
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    console.log('Getting news items...');
-    
-    const newsItems: NewsItem[] = [];
-    
-    // Get all the links first
-    const titleElements = await page.$$('.title-text');
-    console.log(`Found ${titleElements.length} title elements`);
-    
-    const newsLinks = await Promise.all(
-      titleElements.slice(0, 5).map(async (el) => {
-        const title = await el.evaluate((node: Element) => {
-          const sourceElement = node.querySelector('.si-source-name');
-          if (sourceElement) {
-            sourceElement.remove();
-          }
-          return node.textContent || '';
-        });
-        const cryptopanicLink = await el.evaluate((node: Element) => (node.closest('a') as HTMLAnchorElement).href);
-        return { title, cryptopanicLink };
-      })
-    );
-
-    console.log(`Processing ${newsLinks.length} news links...`);
-    
-    // Visit each link and get the content
-    for (const { title, cryptopanicLink } of newsLinks) {
-      try {
-        console.log(`Processing article: ${title}`);
-        await page.goto(cryptopanicLink, { waitUntil: 'networkidle0', timeout: 30000 });
-        await page.waitForSelector('.description-body', { timeout: 10000 });
+    // Extract news data
+    const newsData = await page.evaluate(() => {
+      const articles = document.querySelectorAll('article');
+      return Array.from(articles).slice(0, 5).map(article => {
+        const titleElement = article.querySelector('h6');
+        const dateElement = article.querySelector('time');
+        const linkElement = article.querySelector('a');
         
-        // Get the content
-        const contentElements = await page.$$('.description-body p');
-        const contentParts = await Promise.all(
-          contentElements.map(el => el.evaluate((node: Element) => node.textContent || ''))
-        );
-        const content = contentParts.join('\n');
+        return {
+          title: titleElement?.textContent?.trim() || '',
+          date: dateElement?.getAttribute('datetime') || '',
+          content: '', // We'll get content from individual article pages
+          sourceUrl: linkElement?.href || '',
+          sourceText: 'CoinDesk'
+        };
+      });
+    });
 
-        // Get the source URL and text
-        const sourceInfo = await page.evaluate(() => {
-          const sourceLink = document.querySelector('.post-source-link');
-          if (!sourceLink) return null;
-          
-          const text = sourceLink.textContent || '';
-          return {
-            text: text,
-            url: `https://${text}`
-          };
-        });
-
-        if (title && content && sourceInfo) {
-          newsItems.push({
-            title: title.trim(),
-            content: content.trim(),
-            sourceText: sourceInfo.text.trim(),
-            sourceUrl: sourceInfo.url
+    // Get content for each article
+    for (let news of newsData) {
+      if (news.sourceUrl) {
+        try {
+          await page.goto(news.sourceUrl, { waitUntil: 'networkidle0' });
+          const content = await page.evaluate(() => {
+            const articleBody = document.querySelector('.article-body-text');
+            if (articleBody) {
+              const paragraphs = articleBody.querySelectorAll('p');
+              return Array.from(paragraphs)
+                .slice(0, 3)
+                .map(p => p.textContent?.trim())
+                .filter(Boolean)
+                .join('\n\n');
+            }
+            return '';
           });
-          console.log(`Successfully added article: ${title}`);
+          news.content = content;
+        } catch (error) {
+          console.error(`Error fetching article content: ${error}`);
+          news.content = 'Content not available';
         }
-      } catch (error) {
-        console.error(`Error processing article: ${title}`, error);
-        continue;
       }
     }
 
     await browser.close();
 
     // Filter out articles with empty content
-    const validNews = newsItems.filter(news => news.title && news.content);
-    console.log(`Returning ${validNews.length} valid news items`);
+    const validNews = newsData.filter(news => news.title && news.content);
 
     return {
       statusCode: 200,
@@ -151,18 +100,7 @@ export const handler: Handler = async (event) => {
     console.error('Scraping error:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ 
-        error: 'Failed to scrape news',
-        details: error.message 
-      })
+      body: JSON.stringify({ error: 'Failed to scrape news' })
     };
-  } finally {
-    if (browser) {
-      try {
-        await browser.close();
-      } catch (error) {
-        console.error('Error closing browser:', error);
-      }
-    }
   }
 }; 
