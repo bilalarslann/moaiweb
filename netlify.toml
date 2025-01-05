@@ -1,15 +1,18 @@
 [build]
   command = "npm run build"
   publish = ".next"
+  functions = "netlify/functions"
 
-[build.environment]
-  NEXT_PUBLIC_API_URL = "https://moaiagent.netlify.app"
-  NODE_ENV = "production"
-  NEXT_TELEMETRY_DISABLED = "1"
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["chrome-aws-lambda"]
+  included_files = ["node_modules/chrome-aws-lambda/**/*"]
+  timeout = 30
+  memory = 1024
 
 [[redirects]]
-  from = "/*"
-  to = "/index.html"
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
   status = 200
 
 [[plugins]]
