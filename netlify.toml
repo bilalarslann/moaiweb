@@ -4,8 +4,15 @@
 
 [functions]
   node_bundler = "esbuild"
+  external_node_modules = ["@sparticuz/chromium"]
 
-[functions.scrape]
-  included_files = ["node_modules/@sparticuz/chromium/**"]
+[functions.scrape-news]
+  included_files = ["node_modules/@sparticuz/chromium/**/*"]
   memory = 2048
-  timeout = 30 
+  timeout = 30
+
+[[redirects]]
+  from = "/api/scrape"
+  to = "/.netlify/functions/scrape-news"
+  status = 200
+  force = true 

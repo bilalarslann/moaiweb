@@ -9,6 +9,9 @@ interface NewsItem {
   sourceUrl: string;
 }
 
+export const maxDuration = 30;
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   const { searchQuery } = await request.json();
   let browser;
@@ -26,7 +29,7 @@ export async function POST(request: Request) {
     browser = await puppeteer.launch({
       headless: true,
       executablePath,
-      args: isProduction ? chromium.args : ['--no-sandbox'],
+      args: [...chromium.args, '--no-sandbox'],
       defaultViewport: chromium.defaultViewport,
       ignoreHTTPSErrors: true
     });
