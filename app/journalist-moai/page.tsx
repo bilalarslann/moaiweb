@@ -1,25 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import OpenAI from 'openai';
-import { useSearchParams } from 'next/navigation';
 
-type Message = {
-  type: 'user' | 'bot';
-  content: string;
-};
-
-const openai = new OpenAI({
-  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true
-});
-
-export default function JournalistMoai() {
+const JournalistMoaiContent = () => {
   const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const searchParams = useSearchParams();
 
   const detectLanguage = (text: string) => {
     // Basic language detection - if contains Turkish characters, assume Turkish
@@ -123,5 +111,13 @@ export default function JournalistMoai() {
         </form>
       </div>
     </main>
+  );
+};
+
+export default function JournalistMoai() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <JournalistMoaiContent />
+    </Suspense>
   );
 } 
