@@ -1,6 +1,13 @@
 import chromium from 'chrome-aws-lambda';
 import { Handler } from '@netlify/functions';
 
+interface NewsItem {
+  title: string;
+  content: string;
+  sourceText: string;
+  sourceUrl: string;
+}
+
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return {
@@ -30,62 +37,91 @@ export const handler: Handler = async (event) => {
 
     const page = await browser.newPage();
     
+    // Set user agent and disable webdriver
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    });
+    
     // Set longer timeout for navigation
     page.setDefaultNavigationTimeout(30000);
 
-    // Navigate to CoinDesk search
-    await page.goto(`https://www.coindesk.com/search?s=${encodeURIComponent(searchQuery)}`);
-    
-    // Wait for news items to load
-    await page.waitForSelector('article', { timeout: 10000 });
-
-    // Extract news data
-    const newsData = await page.evaluate(() => {
-      const articles = document.querySelectorAll('article');
-      return Array.from(articles).slice(0, 5).map(article => {
-        const titleElement = article.querySelector('h6');
-        const dateElement = article.querySelector('time');
-        const linkElement = article.querySelector('a');
-        
-        return {
-          title: titleElement?.textContent?.trim() || '',
-          date: dateElement?.getAttribute('datetime') || '',
-          content: '', // We'll get content from individual article pages
-          sourceUrl: linkElement?.href || '',
-          sourceText: 'CoinDesk'
-        };
-      });
+    // Navigate to CryptoPanic search
+    await page.goto(`https://cryptopanic.com/news?search=${encodeURIComponent(searchQuery)}`, {
+      waitUntil: 'networkidle0',
+      timeout: 30000
     });
 
-    // Get content for each article
-    for (let news of newsData) {
-      if (news.sourceUrl) {
-        try {
-          await page.goto(news.sourceUrl, { waitUntil: 'networkidle0' });
-          const content = await page.evaluate(() => {
-            const articleBody = document.querySelector('.article-body-text');
-            if (articleBody) {
-              const paragraphs = articleBody.querySelectorAll('p');
-              return Array.from(paragraphs)
-                .slice(0, 3)
-                .map(p => p.textContent?.trim())
-                .filter(Boolean)
-                .join('\n\n');
-            }
-            return '';
+    // Wait for content to load
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    // Scroll down to load more content
+    await page.evaluate(() => {
+      window.scrollBy(0, window.innerHeight);
+    });
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const newsItems: NewsItem[] = [];
+    
+    // Get all the links first
+    const titleElements = await page.$$('.title-text');
+    const newsLinks = await Promise.all(
+      titleElements.slice(0, 5).map(async (el) => {
+        const title = await el.evaluate((node: Element) => {
+          const sourceElement = node.querySelector('.si-source-name');
+          if (sourceElement) {
+            sourceElement.remove();
+          }
+          return node.textContent || '';
+        });
+        const cryptopanicLink = await el.evaluate((node: Element) => (node.closest('a') as HTMLAnchorElement).href);
+        return { title, cryptopanicLink };
+      })
+    );
+
+    // Visit each link and get the content
+    for (const { title, cryptopanicLink } of newsLinks) {
+      try {
+        await page.goto(cryptopanicLink, { waitUntil: 'networkidle0', timeout: 30000 });
+        await page.waitForSelector('.description-body', { timeout: 10000 });
+        
+        // Get the content
+        const contentElements = await page.$$('.description-body p');
+        const contentParts = await Promise.all(
+          contentElements.map(el => el.evaluate((node: Element) => node.textContent || ''))
+        );
+        const content = contentParts.join('\n');
+
+        // Get the source URL and text
+        const sourceInfo = await page.evaluate(() => {
+          const sourceLink = document.querySelector('.post-source-link');
+          if (!sourceLink) return null;
+          
+          const text = sourceLink.textContent || '';
+          return {
+            text: text,
+            url: `https://${text}`
+          };
+        });
+
+        if (title && content && sourceInfo) {
+          newsItems.push({
+            title: title.trim(),
+            content: content.trim(),
+            sourceText: sourceInfo.text.trim(),
+            sourceUrl: sourceInfo.url
           });
-          news.content = content;
-        } catch (error) {
-          console.error(`Error fetching article content: ${error}`);
-          news.content = 'Content not available';
         }
+      } catch (error) {
+        console.error(`Error fetching article content: ${error}`);
+        continue;
       }
     }
 
     await browser.close();
 
     // Filter out articles with empty content
-    const validNews = newsData.filter(news => news.title && news.content);
+    const validNews = newsItems.filter(news => news.title && news.content);
 
     return {
       statusCode: 200,

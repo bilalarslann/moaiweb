@@ -13,9 +13,10 @@
   timeout = "30 seconds"
 
 [[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
+  from = "/api/scrape"
+  to = "/.netlify/functions/scrape-news"
   status = 200
+  force = true
 
 [[plugins]]
   package = "@netlify/plugin-nextjs" 
