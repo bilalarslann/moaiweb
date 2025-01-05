@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
-import Image from 'next/image';
-import OpenAI from 'openai';
+import React, { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 
-const JournalistMoaiContent = () => {
+// Dinamik olarak yükle
+const JournalistMoaiContent = dynamic(() => Promise.resolve(() => {
   const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -28,8 +28,10 @@ const JournalistMoaiContent = () => {
   };
 
   useEffect(() => {
-    const initialMessage = getInitialMessage(detectLanguage(navigator.language));
-    setMessages([{ role: 'assistant', content: initialMessage }]);
+    if (typeof window !== 'undefined') {
+      const initialMessage = getInitialMessage(detectLanguage(navigator.language));
+      setMessages([{ role: 'assistant', content: initialMessage }]);
+    }
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -112,12 +114,8 @@ const JournalistMoaiContent = () => {
       </div>
     </main>
   );
-};
+}), { ssr: false });
 
 export default function JournalistMoai() {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <JournalistMoaiContent />
-    </Suspense>
-  );
+  return <JournalistMoaiContent />;
 } 
