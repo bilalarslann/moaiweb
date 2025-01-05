@@ -7,8 +7,10 @@
   node_bundler = "esbuild"
   external_node_modules = ["chrome-aws-lambda"]
   included_files = ["node_modules/chrome-aws-lambda/**/*"]
-  timeout = 30
+
+[functions.scrape-news]
   memory = 1024
+  timeout = "30 seconds"
 
 [[redirects]]
   from = "/api/*"
