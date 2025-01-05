@@ -68,10 +68,12 @@ const TradingViewWidget = ({ symbol, interval = '1D', onChartReady, isFullscreen
 }) => {
   const [currentSymbol, setCurrentSymbol] = useState(`BINANCE:${symbol}USDT`);
   const widgetRef = useRef<any>(null);
+  // Generate a unique ID for each widget instance
+  const containerId = useRef(`tradingview_${symbol}_${Math.random().toString(36).substring(7)}`);
 
   useEffect(() => {
     let widget: any = null;
-    const container = document.getElementById(`tradingview_${symbol}`);
+    const container = document.getElementById(containerId.current);
     if (!container) return;
 
     const script = document.createElement('script');
@@ -95,7 +97,7 @@ const TradingViewWidget = ({ symbol, interval = '1D', onChartReady, isFullscreen
             allow_symbol_change: true,
             hide_top_toolbar: true,
             save_image: false,
-            container_id: `tradingview_${symbol}`,
+            container_id: containerId.current,
             library_path: "https://s3.tradingview.com/tv.js",
             auto_save_delay: 5,
             debug: false,
@@ -113,9 +115,15 @@ const TradingViewWidget = ({ symbol, interval = '1D', onChartReady, isFullscreen
               "header_compare",
               "header_undo_redo",
               "header_screenshot",
-              "header_fullscreen_button"
+              "header_fullscreen_button",
+              "border_around_the_chart",
+              "left_toolbar",
+              "volume_force_overlay"
             ],
-            enabled_features: ["study_templates"],
+            enabled_features: [
+              "study_templates",
+              "remove_library_container_border"
+            ],
             studies: [
               "MASimple@tv-basicstudies",
               "RSI@tv-basicstudies",
@@ -166,7 +174,9 @@ const TradingViewWidget = ({ symbol, interval = '1D', onChartReady, isFullscreen
               "symbolWatermarkProperties.transparency": 90,
               "scalesProperties.textColor": "#AAA",
               "mainSeriesProperties.candleStyle.wickUpColor": '#26a69a',
-              "mainSeriesProperties.candleStyle.wickDownColor": '#ef5350'
+              "mainSeriesProperties.candleStyle.wickDownColor": '#ef5350',
+              "paneProperties.topMargin": 5,
+              "paneProperties.bottomMargin": 5
             },
             loading_screen: { backgroundColor: "#131722" },
             time_frames: [
@@ -208,7 +218,7 @@ const TradingViewWidget = ({ symbol, interval = '1D', onChartReady, isFullscreen
 
   return (
     <div className="tradingview-widget-container h-full">
-      <div id={`tradingview_${symbol}`} className={`w-full ${isFullscreen ? 'h-screen' : 'h-[400px]'} rounded-xl overflow-hidden`} />
+      <div id={containerId.current} className={`w-full ${isFullscreen ? 'h-screen' : 'h-[400px]'} rounded-xl overflow-hidden`} />
     </div>
   );
 };
@@ -313,22 +323,32 @@ export default function AnalistMoai() {
   const [currentPlaceholder, setCurrentPlaceholder] = useState('');
   const [chartWidget, setChartWidget] = useState<any>(null);
   const [fullscreenChart, setFullscreenChart] = useState<{symbol: string, interval?: string} | null>(null);
+  const [userLanguage, setUserLanguage] = useState<'en' | 'tr'>('en');
 
-  const placeholders = [
-    "Can you do technical analysis for Bitcoin?",
-    "What's the price target for Ethereum?",
-    "Analyze BTC/USD chart",
-    "How's the market looking?",
-    "When will altcoin season start?",
-  ];
+  const placeholders = {
+    en: [
+      "Can you do technical analysis for Bitcoin?",
+      "What's the price target for Ethereum?",
+      "Analyze BTC/USD chart",
+      "How's the market looking?",
+      "When will altcoin season start?",
+    ],
+    tr: [
+      "Bitcoin için teknik analiz yapar mısın?",
+      "Ethereum için hedef fiyat nedir?",
+      "BTC/USD grafiğini analiz et",
+      "Piyasa nasıl görünüyor?",
+      "Altcoin sezonu ne zaman başlayacak?",
+    ]
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentPlaceholder(placeholders[Math.floor(Math.random() * placeholders.length)]);
+      setCurrentPlaceholder(placeholders[userLanguage][Math.floor(Math.random() * placeholders[userLanguage].length)]);
     }, 3000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [userLanguage]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -341,30 +361,67 @@ export default function AnalistMoai() {
     setMessages(prev => [...prev, { type: 'user', content: userMessage }]);
 
     try {
+      // First, detect the language of the user's message
+      const languageDetection = await openai.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content: `You are a language detector. Analyze the given text and return ONLY "tr" for Turkish or "en" for English in your response. Nothing else.`
+          },
+          {
+            role: "user",
+            content: userMessage
+          }
+        ],
+        model: "gpt-3.5-turbo",
+      });
+
+      const detectedLanguage = languageDetection.choices[0]?.message?.content?.trim().toLowerCase() as 'en' | 'tr';
+      setUserLanguage(detectedLanguage);
+
       const symbolCompletion = await openai.chat.completions.create({
         messages: [
           {
             role: "system",
-            content: `Extract the cryptocurrency symbol and chart display request from the given message. Return the answer in JSON format.
-            Example: { "symbol": "BTC", "showChart": true, "onlyChart": true/false }
-            
-            If the message contains any of these cases, showChart should be true:
-            - Chart display request
-            - Technical analysis request
-            - Support/resistance analysis request
-            - Price analysis request
-            - Trend analysis request
-            
-            If the message only requests to show the chart, onlyChart should be true.
-            Example messages and responses:
-            "Show Bitcoin chart" -> { "symbol": "BTC", "showChart": true, "onlyChart": true }
-            "Just BTC chart" -> { "symbol": "BTC", "showChart": true, "onlyChart": true }
-            "How's BTC?" -> { "symbol": "BTC", "showChart": true, "onlyChart": false }
-            "ETH chart" -> { "symbol": "ETH", "showChart": true, "onlyChart": true }
-            "Analyze Ethereum" -> { "symbol": "ETH", "showChart": true, "onlyChart": false }
-            "What are Bitcoin's support and resistance levels?" -> { "symbol": "BTC", "showChart": true, "onlyChart": false }
-            "Tell me about cryptocurrencies" -> { "symbol": null, "showChart": false, "onlyChart": false }
-            "Hello" -> { "symbol": null, "showChart": false, "onlyChart": false }`
+            content: detectedLanguage === 'tr' ? 
+              `Verilen mesajdan kripto para sembolünü ve grafik gösterme isteğini çıkar. Cevabı JSON formatında dön.
+              Örnek: { "symbol": "BTC", "showChart": true, "onlyChart": true/false }
+              
+              Eğer mesaj şu durumlardan birini içeriyorsa, showChart true olmalı:
+              - Grafik gösterme isteği
+              - Teknik analiz isteği
+              - Destek/direnç analizi isteği
+              - Fiyat analizi isteği
+              - Trend analizi isteği
+              
+              Eğer mesaj sadece grafiği göstermeyi istiyorsa, onlyChart true olmalı.
+              Örnek mesajlar ve cevaplar:
+              "Bitcoin grafiğini göster" -> { "symbol": "BTC", "showChart": true, "onlyChart": true }
+              "BTC grafiği" -> { "symbol": "BTC", "showChart": true, "onlyChart": true }
+              "BTC nasıl?" -> { "symbol": "BTC", "showChart": true, "onlyChart": false }
+              "Ethereum'u analiz et" -> { "symbol": "ETH", "showChart": true, "onlyChart": false }
+              "Bitcoin'in destek ve direnç seviyeleri nedir?" -> { "symbol": "BTC", "showChart": true, "onlyChart": false }
+              "Kripto paralar hakkında bilgi ver" -> { "symbol": null, "showChart": false, "onlyChart": false }
+              "Merhaba" -> { "symbol": null, "showChart": false, "onlyChart": false }` :
+              `Extract the cryptocurrency symbol and chart display request from the given message. Return the answer in JSON format.
+              Example: { "symbol": "BTC", "showChart": true, "onlyChart": true/false }
+              
+              If the message contains any of these cases, showChart should be true:
+              - Chart display request
+              - Technical analysis request
+              - Support/resistance analysis request
+              - Price analysis request
+              - Trend analysis request
+              
+              If the message only requests to show the chart, onlyChart should be true.
+              Example messages and responses:
+              "Show Bitcoin chart" -> { "symbol": "BTC", "showChart": true, "onlyChart": true }
+              "Just BTC chart" -> { "symbol": "BTC", "showChart": true, "onlyChart": true }
+              "How's BTC?" -> { "symbol": "BTC", "showChart": true, "onlyChart": false }
+              "Analyze Ethereum" -> { "symbol": "ETH", "showChart": true, "onlyChart": false }
+              "What are Bitcoin's support and resistance levels?" -> { "symbol": "BTC", "showChart": true, "onlyChart": false }
+              "Tell me about cryptocurrencies" -> { "symbol": null, "showChart": false, "onlyChart": false }
+              "Hello" -> { "symbol": null, "showChart": false, "onlyChart": false }`
           },
           {
             role: "user",
@@ -412,66 +469,120 @@ export default function AnalistMoai() {
               messages: [
                 {
                   role: "system",
-                  content: `You are ANALYST MOAI, an AI cryptocurrency analyst assistant.
-                  Analyze the current chart using the following real-time data:
+                  content: detectedLanguage === 'tr' ? 
+                    `Sen ANALIST MOAI'sin, bir yapay zeka kripto analisti.
+                    Aşağıdaki gerçek zamanlı verileri kullanarak mevcut grafiği analiz et:
 
-                  Current Data:
-                  - Price: **${chartData.price}**
-                  - RSI: **${chartData.rsi?.toFixed(2)}**
-                  - SMA: **${chartData.sma?.toFixed(2)}**
-                  - Bollinger Bands:
-                    * Upper: **${chartData.bb.upper?.toFixed(2)}**
-                    * Middle: **${chartData.bb.middle?.toFixed(2)}**
-                    * Lower: **${chartData.bb.lower?.toFixed(2)}**
-                  - Support Levels: **${chartData.supports.map(s => s.toFixed(2)).join('**, **')}**
-                  - Resistance Levels: **${chartData.resistances.map(r => r.toFixed(2)).join('**, **')}**
+                    Mevcut Veriler:
+                    - Fiyat: **${chartData.price}**
+                    - RSI: **${chartData.rsi?.toFixed(2)}**
+                    - SMA: **${chartData.sma?.toFixed(2)}**
+                    - Bollinger Bantları:
+                      * Üst: **${chartData.bb.upper?.toFixed(2)}**
+                      * Orta: **${chartData.bb.middle?.toFixed(2)}**
+                      * Alt: **${chartData.bb.lower?.toFixed(2)}**
+                    - Destek Seviyeleri: **${chartData.supports.map(s => s.toFixed(2)).join('**, **')}**
+                    - Direnç Seviyeleri: **${chartData.resistances.map(r => r.toFixed(2)).join('**, **')}**
 
-                  Provide a detailed technical analysis. Use new paragraphs for each section.
-                  The analysis should include these sections (each starting with a new paragraph):
+                    Detaylı bir teknik analiz sun. Her bölüm için yeni paragraf kullan.
+                    Analiz şu bölümleri içermeli (her biri yeni paragrafla başlamalı):
 
-                  1. CURRENT STATUS AND TREND ANALYSIS
-                  - Current price level
-                  - Trend status relative to SMA (above or below)
-                  - General trend direction
+                    1. MEVCUT DURUM VE TREND ANALİZİ
+                    - Mevcut fiyat seviyesi
+                    - SMA'ya göre trend durumu (üstünde veya altında)
+                    - Genel trend yönü
 
-                  2. RSI ANALYSIS
-                  - RSI value and its meaning
-                  - Overbought/oversold conditions
-                  - Momentum assessment
+                    2. RSI ANALİZİ
+                    - RSI değeri ve anlamı
+                    - Aşırı alım/satım durumları
+                    - Momentum değerlendirmesi
 
-                  3. BOLLINGER BANDS ANALYSIS
-                  - Price position relative to bands
-                  - Volatility status
-                  - Potential squeeze/expansion
+                    3. BOLLINGER BANT ANALİZİ
+                    - Fiyatın bantlara göre konumu
+                    - Volatilite durumu
+                    - Olası sıkışma/genişleme
 
-                  4. SUPPORT AND RESISTANCE LEVELS
-                  - Nearest support levels and their significance
-                  - Nearest resistance levels and their significance
-                  - Critical levels
+                    4. DESTEK VE DİRENÇ SEVİYELERİ
+                    - En yakın destek seviyeleri ve önemi
+                    - En yakın direnç seviyeleri ve önemi
+                    - Kritik seviyeler
 
-                  5. OVERALL ASSESSMENT AND SCENARIOS
-                  - Short-term expectations
-                  - Possible scenarios
-                  - Levels to watch
+                    5. GENEL DEĞERLENDİRME VE SENARYOLAR
+                    - Kısa vadeli beklentiler
+                    - Olası senaryolar
+                    - Takip edilecek seviyeler
 
-                  Start each section with appropriate emojis like "📊", "📈", "💹", "🎯", "💡".
-                  Use **bold** for important numerical values and critical levels.
-                  Leave a blank line between paragraphs.
-                  Use markdown format (example: **bold text**).
+                    Her bölüme "📊", "📈", "💹", "🎯", "💡" gibi uygun emojilerle başla.
+                    Önemli sayısal değerleri ve kritik seviyeleri **kalın** yaz.
+                    Paragraflar arasında boş satır bırak.
+                    Markdown formatını kullan (örnek: **kalın metin**).
 
-                  Finally, add this note in a separate paragraph:
+                    Son olarak, ayrı bir paragrafta şu notu ekle:
 
-                  ⚠️ This analysis is for educational purposes only, not financial advice.`
+                    ⚠️ Bu analiz sadece eğitim amaçlıdır, yatırım tavsiyesi değildir.` :
+                    `You are ANALYST MOAI, an AI cryptocurrency analyst assistant.
+                    Analyze the current chart using the following real-time data:
+
+                    Current Data:
+                    - Price: **${chartData.price}**
+                    - RSI: **${chartData.rsi?.toFixed(2)}**
+                    - SMA: **${chartData.sma?.toFixed(2)}**
+                    - Bollinger Bands:
+                      * Upper: **${chartData.bb.upper?.toFixed(2)}**
+                      * Middle: **${chartData.bb.middle?.toFixed(2)}**
+                      * Lower: **${chartData.bb.lower?.toFixed(2)}**
+                    - Support Levels: **${chartData.supports.map(s => s.toFixed(2)).join('**, **')}**
+                    - Resistance Levels: **${chartData.resistances.map(r => r.toFixed(2)).join('**, **')}**
+
+                    Provide a detailed technical analysis. Use new paragraphs for each section.
+                    The analysis should include these sections (each starting with a new paragraph):
+
+                    1. CURRENT STATUS AND TREND ANALYSIS
+                    - Current price level
+                    - Trend status relative to SMA (above or below)
+                    - General trend direction
+
+                    2. RSI ANALYSIS
+                    - RSI value and its meaning
+                    - Overbought/oversold conditions
+                    - Momentum assessment
+
+                    3. BOLLINGER BANDS ANALYSIS
+                    - Price position relative to bands
+                    - Volatility status
+                    - Potential squeeze/expansion
+
+                    4. SUPPORT AND RESISTANCE LEVELS
+                    - Nearest support levels and their significance
+                    - Nearest resistance levels and their significance
+                    - Critical levels
+
+                    5. OVERALL ASSESSMENT AND SCENARIOS
+                    - Short-term expectations
+                    - Possible scenarios
+                    - Levels to watch
+
+                    Start each section with appropriate emojis like "📊", "📈", "💹", "🎯", "💡".
+                    Use **bold** for important numerical values and critical levels.
+                    Leave a blank line between paragraphs.
+                    Use markdown format (example: **bold text**).
+
+                    Finally, add this note in a separate paragraph:
+
+                    ⚠️ This analysis is for educational purposes only, not financial advice.`
                 },
                 {
                   role: "user",
-                  content: `Provide a detailed technical analysis for ${symbol} based on the chart indicators.`
+                  content: detectedLanguage === 'tr' ? 
+                    `${symbol} için detaylı teknik analiz yap.` :
+                    `Provide a detailed technical analysis for ${symbol}.`
                 }
               ],
               model: "gpt-3.5-turbo",
             });
 
-            const botResponse = completion.choices[0]?.message?.content || "Sorry, an error occurred. Please try again.";
+            const botResponse = completion.choices[0]?.message?.content || 
+              (detectedLanguage === 'tr' ? "Üzgünüm, bir hata oluştu." : "Sorry, an error occurred.");
             
             setMessages(prev => [...prev, {
               type: 'bot',
@@ -481,7 +592,9 @@ export default function AnalistMoai() {
             console.error('Analysis error:', error);
             setMessages(prev => [...prev, {
               type: 'bot',
-              content: 'Sorry, an error occurred. Please try again.'
+              content: detectedLanguage === 'tr' ?
+                'Üzgünüm, analiz yaparken bir hata oluştu. Lütfen tekrar deneyin.' :
+                'Sorry, an error occurred during analysis. Please try again.'
             }]);
           }
         }
@@ -491,8 +604,9 @@ export default function AnalistMoai() {
           messages: [
             {
               role: "system",
-              content: `You are ANALYST MOAI, an AI cryptocurrency analyst assistant.
-              You can provide general information about cryptocurrency markets.`
+              content: detectedLanguage === 'tr' ?
+                "Sen ANALİST MOAI adında bir kripto para analisti yapay zeka asistanısın. Kripto para piyasaları hakkında genel bilgi verebilirsin. Her zaman nazik ve yardımsever olmalısın. Cevaplarının sonuna 'Bu bilgiler sadece eğitim amaçlıdır, yatırım tavsiyesi değildir.' notunu eklemelisin." :
+                "You are ANALYST MOAI, an AI cryptocurrency analyst assistant. You can provide general information about cryptocurrency markets. Always be polite and helpful. Add the note 'This information is for educational purposes only, not investment advice.' at the end of your responses."
             },
             {
               role: "user",
@@ -502,11 +616,15 @@ export default function AnalistMoai() {
           model: "gpt-3.5-turbo",
         });
 
-        const botResponse = completion.choices[0]?.message?.content || "Sorry, an error occurred. Please try again.";
+        const botResponse = completion.choices[0]?.message?.content || 
+          (detectedLanguage === 'tr' ? "Üzgünüm, bir hata oluştu." : "Sorry, an error occurred.");
         
         setMessages(prev => [...prev, {
           type: 'bot',
-          content: botResponse
+          content: botResponse + "\n\n⚠️ " + 
+            (detectedLanguage === 'tr' ?
+              "Bu bilgiler sadece eğitim amaçlıdır, yatırım tavsiyesi değildir." :
+              "This information is for educational purposes only, not investment advice.")
         }]);
       }
 
@@ -514,7 +632,9 @@ export default function AnalistMoai() {
       console.error('Error:', error);
       setMessages(prev => [...prev, {
         type: 'bot',
-        content: 'Sorry, an error occurred. Please try again.'
+        content: userLanguage === 'tr' ?
+          'Üzgünüm, bir hata oluştu. Lütfen tekrar deneyin.' :
+          'Sorry, an error occurred. Please try again.'
       }]);
     }
 
@@ -592,13 +712,13 @@ export default function AnalistMoai() {
                 </ReactMarkdown>
               </div>
               {message.chart && (
-                <div className="mt-4 mb-4 relative">
+                <div className="relative">
                   <button
                     onClick={() => message.chart && setFullscreenChart(message.chart)}
                     className="absolute top-4 right-4 z-10 bg-gray-800/50 p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L15 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
                     </svg>
                   </button>
                   <TradingViewWidget 
