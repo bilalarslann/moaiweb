@@ -1,4 +1,5 @@
-import chromium from 'chrome-aws-lambda';
+import chromium from '@sparticuz/chromium';
+import puppeteer from 'puppeteer-core';
 import { Handler } from '@netlify/functions';
 
 interface NewsItem {
@@ -16,6 +17,7 @@ export const handler: Handler = async (event) => {
     };
   }
 
+  let browser;
   try {
     const { searchQuery, context } = JSON.parse(event.body || '{}');
     
@@ -26,32 +28,33 @@ export const handler: Handler = async (event) => {
       };
     }
 
-    // Launch browser with AWS Lambda specific settings
-    const browser = await chromium.puppeteer.launch({
+    // Launch browser with Netlify specific settings
+    browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath,
-      headless: true,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
       ignoreHTTPSErrors: true
     });
 
     const page = await browser.newPage();
     
     // Set user agent and disable webdriver
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
     await page.evaluateOnNewDocument(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => false });
     });
     
-    // Set longer timeout for navigation
-    page.setDefaultNavigationTimeout(30000);
-
+    console.log('Navigating to CryptoPanic...');
+    
     // Navigate to CryptoPanic search
     await page.goto(`https://cryptopanic.com/news?search=${encodeURIComponent(searchQuery)}`, {
       waitUntil: 'networkidle0',
       timeout: 30000
     });
 
+    console.log('Waiting for content to load...');
+    
     // Wait for content to load
     await new Promise(resolve => setTimeout(resolve, 5000));
 
@@ -61,10 +64,14 @@ export const handler: Handler = async (event) => {
     });
     await new Promise(resolve => setTimeout(resolve, 2000));
 
+    console.log('Getting news items...');
+    
     const newsItems: NewsItem[] = [];
     
     // Get all the links first
     const titleElements = await page.$$('.title-text');
+    console.log(`Found ${titleElements.length} title elements`);
+    
     const newsLinks = await Promise.all(
       titleElements.slice(0, 5).map(async (el) => {
         const title = await el.evaluate((node: Element) => {
@@ -79,9 +86,12 @@ export const handler: Handler = async (event) => {
       })
     );
 
+    console.log(`Processing ${newsLinks.length} news links...`);
+    
     // Visit each link and get the content
     for (const { title, cryptopanicLink } of newsLinks) {
       try {
+        console.log(`Processing article: ${title}`);
         await page.goto(cryptopanicLink, { waitUntil: 'networkidle0', timeout: 30000 });
         await page.waitForSelector('.description-body', { timeout: 10000 });
         
@@ -111,9 +121,10 @@ export const handler: Handler = async (event) => {
             sourceText: sourceInfo.text.trim(),
             sourceUrl: sourceInfo.url
           });
+          console.log(`Successfully added article: ${title}`);
         }
       } catch (error) {
-        console.error(`Error fetching article content: ${error}`);
+        console.error(`Error processing article: ${title}`, error);
         continue;
       }
     }
@@ -122,6 +133,7 @@ export const handler: Handler = async (event) => {
 
     // Filter out articles with empty content
     const validNews = newsItems.filter(news => news.title && news.content);
+    console.log(`Returning ${validNews.length} valid news items`);
 
     return {
       statusCode: 200,
@@ -136,7 +148,14 @@ export const handler: Handler = async (event) => {
     console.error('Scraping error:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to scrape news' })
+      body: JSON.stringify({ 
+        error: 'Failed to scrape news',
+        details: error.message 
+      })
     };
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
   }
 }; 
