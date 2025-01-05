@@ -3,10 +3,13 @@
   publish = ".next"
   functions = "netlify/functions"
 
+[build.environment]
+  CHROME_EXECUTABLE_PATH = "/var/task/node_modules/@sparticuz/chromium/bin"
+
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["chrome-aws-lambda"]
-  included_files = ["node_modules/chrome-aws-lambda/**/*"]
+  external_node_modules = ["@sparticuz/chromium"]
+  included_files = ["node_modules/@sparticuz/chromium/**/*"]
 
 [functions.scrape-news]
   memory = 1024

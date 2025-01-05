@@ -28,12 +28,15 @@ export const handler: Handler = async (event) => {
       };
     }
 
+    // Initialize chromium
+    await chromium.font('https://raw.githack.com/googlei18n/noto-emoji/master/fonts/NotoColorEmoji.ttf');
+    
     // Launch browser with Netlify specific settings
     browser = await puppeteer.launch({
-      args: chromium.args,
+      args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
       defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
+      executablePath: process.env.CHROME_EXECUTABLE_PATH || await chromium.executablePath(),
+      headless: true,
       ignoreHTTPSErrors: true
     });
 
@@ -155,7 +158,11 @@ export const handler: Handler = async (event) => {
     };
   } finally {
     if (browser) {
-      await browser.close();
+      try {
+        await browser.close();
+      } catch (error) {
+        console.error('Error closing browser:', error);
+      }
     }
   }
 }; 
