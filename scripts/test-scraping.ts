@@ -17,12 +17,14 @@ export async function scrapeNews(searchQuery?: string) {
     console.log('Launching chrome headless');
     
     // Configure Chrome for Netlify environment
-    await chromium.font('https://raw.githack.com/googlei18n/noto-emoji/master/fonts/NotoColorEmoji.ttf');
-    
     browser = await puppeteer.launch({
       args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
+      defaultViewport: {
+        width: 1920,
+        height: 1080,
+        deviceScaleFactor: 1,
+      },
+      executablePath: await chromium.executablePath('https://raw.githubusercontent.com/Sparticuz/chromium/v119.0.0/source/chromium-v119.0.0-pack.tar'),
       headless: true,
       ignoreHTTPSErrors: true,
     });
@@ -33,15 +35,16 @@ export async function scrapeNews(searchQuery?: string) {
 
     const page = await browser.newPage();
     
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36');
     
     await page.evaluateOnNewDocument(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => false });
     });
 
+    const baseUrl = 'https://cryptopanic.com';
     const url = searchQuery 
-      ? `https://cryptopanic.com/news?search=${encodeURIComponent(searchQuery)}`
-      : 'https://cryptopanic.com/news/';
+      ? `${baseUrl}/news?search=${encodeURIComponent(searchQuery)}`
+      : `${baseUrl}/news/`;
 
     console.log('Navigating to:', url);
     await page.goto(url, {
@@ -49,14 +52,17 @@ export async function scrapeNews(searchQuery?: string) {
       timeout: 30000
     });
 
+    console.log('Waiting for content to load...');
     await new Promise(resolve => setTimeout(resolve, 5000));
 
+    console.log('Scrolling page...');
     await page.evaluate(() => {
       window.scrollBy(0, window.innerHeight);
     });
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     // Get all the links first
+    console.log('Finding news articles...');
     const titleElements = await page.$$('.title-text');
     const newsLinks = await Promise.all(
       titleElements.slice(0, 5).map(async (el) => {
@@ -67,7 +73,10 @@ export async function scrapeNews(searchQuery?: string) {
           }
           return node.textContent || '';
         });
-        const cryptopanicLink = await el.evaluate((node: Element) => (node.closest('a') as HTMLAnchorElement).href);
+        const cryptopanicLink = await el.evaluate((node: Element) => {
+          const anchor = node.closest('a') as HTMLAnchorElement;
+          return anchor ? (anchor.href.startsWith('http') ? anchor.href : `${baseUrl}${anchor.href}`) : '';
+        });
         return { title, cryptopanicLink };
       })
     );
@@ -75,6 +84,12 @@ export async function scrapeNews(searchQuery?: string) {
     // Now visit each link and get the content
     for (const { title, cryptopanicLink } of newsLinks) {
       try {
+        if (!cryptopanicLink) {
+          console.log(`Skipping article with no link: ${title}`);
+          continue;
+        }
+
+        console.log(`Processing article: ${title}`);
         await page.goto(cryptopanicLink, {
           waitUntil: 'networkidle0',
           timeout: 30000
