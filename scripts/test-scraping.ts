@@ -16,15 +16,25 @@ export async function scrapeNews(searchQuery?: string) {
     console.log('Launching chrome headless');
     
     // Configure Chrome for Netlify environment
+    const executablePath = process.env.CHROME_EXECUTABLE_PATH || await chromium.executablePath;
+
     const options = {
       args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath,
-      headless: chromium.headless,
+      executablePath,
+      headless: true,
       ignoreHTTPSErrors: true,
+      defaultViewport: {
+        width: 1920,
+        height: 1080,
+        deviceScaleFactor: 1,
+      }
     };
 
-    console.log('Chrome launch options:', options);
+    console.log('Chrome launch options:', {
+      ...options,
+      executablePath: executablePath ? 'FOUND' : 'NOT_FOUND'
+    });
+
     browser = await chromium.puppeteer.launch(options);
 
     if (!browser) {
@@ -45,7 +55,7 @@ export async function scrapeNews(searchQuery?: string) {
 
     console.log('Navigating to:', url);
     await page.goto(url, {
-      waitUntil: ['domcontentloaded', 'networkidle0'],
+      waitUntil: 'networkidle0',
       timeout: 30000
     });
 
@@ -76,7 +86,7 @@ export async function scrapeNews(searchQuery?: string) {
     for (const { title, cryptopanicLink } of newsLinks) {
       try {
         await page.goto(cryptopanicLink, {
-          waitUntil: ['domcontentloaded', 'networkidle0'],
+          waitUntil: 'networkidle0',
           timeout: 30000
         });
         
