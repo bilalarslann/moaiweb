@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server';
 
-export const maxDuration = 30;
-export const dynamic = 'force-dynamic';
-
 export async function POST(request: Request) {
-  const body = await request.json();
-  
   try {
-    const response = await fetch('/.netlify/functions/scrape-news', {
+    const body = await request.json();
+    
+    // Call the Netlify background function
+    const response = await fetch('/.netlify/functions/scrape-background', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -15,10 +13,14 @@ export async function POST(request: Request) {
       body: JSON.stringify(body)
     });
 
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
     const data = await response.json();
     return NextResponse.json(data);
-  } catch (err: any) {
-    console.error('Error calling scrape function:', err.message);
-    return NextResponse.json({ error: err.message });
+  } catch (error: any) {
+    console.error('Error calling scraping function:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 } 
