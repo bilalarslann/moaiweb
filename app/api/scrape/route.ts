@@ -6,8 +6,8 @@ export async function POST(request: Request) {
     const body = await request.json();
     console.log('Sending request to Netlify function with body:', body);
     
-    // Call the Netlify function
-    const response = await axios.post('/.netlify/functions/scrape-news', body);
+    // Call the Netlify background function
+    const response = await axios.post('/.netlify/functions/scrape-news-background', body);
     console.log('Received response from Netlify function:', response.data);
     
     return NextResponse.json(response.data);
