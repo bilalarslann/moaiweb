@@ -1,11 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    serverActions: true,
+  },
   images: {
-    domains: ['images.unsplash.com'],
     unoptimized: true,
   },
-  env: {
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals = [...config.externals, 'puppeteer-core', '@sparticuz/chromium'];
+    }
+    return config;
   }
 }
 

@@ -1,6 +1,5 @@
-import { Handler } from '@netlify/functions';
-import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
+const chromium = require('chrome-aws-lambda');
+const puppeteer = require('puppeteer-core');
 
 interface NewsItem {
   title: string;
@@ -9,26 +8,21 @@ interface NewsItem {
   sourceUrl: string;
 }
 
-export const handler: Handler = async (event) => {
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: 'Method Not Allowed'
-    };
-  }
-
-  const { searchQuery } = JSON.parse(event.body || '{}');
-  let browser;
+exports.handler = async (event, context) => {
+  let browser = null;
+  const newsItems: NewsItem[] = [];
 
   try {
-    console.log('Launching browser...');
-    
+    const { searchQuery } = JSON.parse(event.body || '{}');
+    console.log('Launching chrome headless');
+
+    const executablePath = await chromium.executablePath;
+
+    // Launch browser
     browser = await puppeteer.launch({
       args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: true,
-      ignoreHTTPSErrors: true
+      executablePath: executablePath,
+      headless: chromium.headless,
     });
 
     const page = await browser.newPage();
@@ -41,23 +35,20 @@ export const handler: Handler = async (event) => {
 
     console.log('Fetching news for query:', searchQuery);
     await page.goto(`https://cryptopanic.com/news?search=${encodeURIComponent(searchQuery)}`, {
-      waitUntil: 'networkidle0',
-      timeout: 60000 // We can use longer timeouts now
+      waitUntil: ['domcontentloaded', 'networkidle0']
     });
 
-    await new Promise(resolve => setTimeout(resolve, 8000));
+    await new Promise(resolve => setTimeout(resolve, 5000));
 
     await page.evaluate(() => {
       window.scrollBy(0, window.innerHeight);
     });
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    const newsItems: NewsItem[] = [];
+    await new Promise(resolve => setTimeout(resolve, 2000));
     
     // Get all the links first
     const titleElements = await page.$$('.title-text');
     const newsLinks = await Promise.all(
-      titleElements.slice(0, 5).map(async (el) => { // Back to 5 items
+      titleElements.slice(0, 5).map(async (el) => {
         const title = await el.evaluate((node: Element) => {
           const sourceElement = node.querySelector('.si-source-name');
           if (sourceElement) {
@@ -73,8 +64,11 @@ export const handler: Handler = async (event) => {
     // Now visit each link and get the content
     for (const { title, cryptopanicLink } of newsLinks) {
       try {
-        await page.goto(cryptopanicLink, { waitUntil: 'networkidle0', timeout: 60000 });
-        await page.waitForSelector('.description-body', { timeout: 15000 });
+        await page.goto(cryptopanicLink, {
+          waitUntil: ['domcontentloaded', 'networkidle0']
+        });
+        
+        await page.waitForSelector('.description-body');
         
         const contentElements = await page.$$('.description-body p');
         const contentParts = await Promise.all(
@@ -114,14 +108,16 @@ export const handler: Handler = async (event) => {
       body: JSON.stringify(newsItems)
     };
 
-  } catch (err: any) {
-    console.error('Error scraping CryptoPanic:', err.message);
+  } catch (error) {
+    console.log('error', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: err.message })
+      body: JSON.stringify({
+        error: error
+      })
     };
   } finally {
-    if (browser) {
+    if (browser !== null) {
       await browser.close();
     }
   }

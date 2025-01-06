@@ -4,7 +4,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     
-    // Call the Netlify background function
+    // Call the Netlify function
     const response = await fetch('/.netlify/functions/scrape-background', {
       method: 'POST',
       headers: {
