@@ -11,6 +11,7 @@
   "dependencies": {
     "@netlify/functions": "^3.0.0",
     "@types/node": "20.11.19",
+    "@types/puppeteer-core": "^7.0.4",
     "@types/react": "18.2.57",
     "@types/react-dom": "18.2.19",
     "autoprefixer": "^10.4.20",
