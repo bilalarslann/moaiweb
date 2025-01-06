@@ -1,4 +1,5 @@
 import { Browser } from 'puppeteer-core';
+import { Handler, HandlerEvent, HandlerContext } from '@netlify/functions';
 const chromium = require('chrome-aws-lambda');
 const puppeteer = require('puppeteer-core');
 
@@ -9,7 +10,7 @@ interface NewsItem {
   sourceUrl: string;
 }
 
-exports.handler = async (event, context) => {
+export const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   let browser: Browser | null = null;
   const newsItems: NewsItem[] = [];
 
