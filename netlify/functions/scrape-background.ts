@@ -1,3 +1,4 @@
+import { Browser } from 'puppeteer-core';
 const chromium = require('chrome-aws-lambda');
 const puppeteer = require('puppeteer-core');
 
@@ -9,7 +10,7 @@ interface NewsItem {
 }
 
 exports.handler = async (event, context) => {
-  let browser = null;
+  let browser: Browser | null = null;
   const newsItems: NewsItem[] = [];
 
   try {
@@ -24,6 +25,10 @@ exports.handler = async (event, context) => {
       executablePath: executablePath,
       headless: chromium.headless,
     });
+
+    if (!browser) {
+      throw new Error('Failed to launch browser');
+    }
 
     const page = await browser.newPage();
     
@@ -117,7 +122,7 @@ exports.handler = async (event, context) => {
       })
     };
   } finally {
-    if (browser !== null) {
+    if (browser) {
       await browser.close();
     }
   }
