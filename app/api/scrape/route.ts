@@ -1,26 +1,19 @@
 import { NextResponse } from 'next/server';
+import axios from 'axios';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     
     // Call the Netlify function
-    const response = await fetch('/.netlify/functions/scrape-background', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body)
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return NextResponse.json(data);
-  } catch (error: any) {
-    console.error('Error calling scraping function:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const response = await axios.post('/.netlify/functions/scrape-news', body);
+    
+    return NextResponse.json(response.data);
+  } catch (error) {
+    console.error('Error in scrape route:', error);
+    return NextResponse.json(
+      { error: 'Failed to scrape news' },
+      { status: 500 }
+    );
   }
 } 
