@@ -1,5 +1,6 @@
 import { Browser } from 'puppeteer-core';
-const chromium = require('chrome-aws-lambda');
+import chromium from '@sparticuz/chromium';
+import puppeteer from 'puppeteer-core';
 
 interface NewsItem {
   title: string;
@@ -16,26 +17,15 @@ export async function scrapeNews(searchQuery?: string) {
     console.log('Launching chrome headless');
     
     // Configure Chrome for Netlify environment
-    const executablePath = process.env.CHROME_EXECUTABLE_PATH || await chromium.executablePath;
-
-    const options = {
+    await chromium.font('https://raw.githack.com/googlei18n/noto-emoji/master/fonts/NotoColorEmoji.ttf');
+    
+    browser = await puppeteer.launch({
       args: chromium.args,
-      executablePath,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
       headless: true,
       ignoreHTTPSErrors: true,
-      defaultViewport: {
-        width: 1920,
-        height: 1080,
-        deviceScaleFactor: 1,
-      }
-    };
-
-    console.log('Chrome launch options:', {
-      ...options,
-      executablePath: executablePath ? 'FOUND' : 'NOT_FOUND'
     });
-
-    browser = await chromium.puppeteer.launch(options);
 
     if (!browser) {
       throw new Error('Failed to launch browser');
