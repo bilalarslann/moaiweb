@@ -1,6 +1,5 @@
 import { Browser } from 'puppeteer-core';
 const chromium = require('chrome-aws-lambda');
-const puppeteer = require('puppeteer-core');
 
 interface NewsItem {
   title: string;
@@ -16,13 +15,17 @@ export async function scrapeNews(searchQuery?: string) {
   try {
     console.log('Launching chrome headless');
     
-    const executablePath = await chromium.executablePath;
-
-    browser = await puppeteer.launch({
+    // Configure Chrome for Netlify environment
+    const options = {
       args: chromium.args,
-      executablePath: executablePath,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath,
       headless: chromium.headless,
-    });
+      ignoreHTTPSErrors: true,
+    };
+
+    console.log('Chrome launch options:', options);
+    browser = await chromium.puppeteer.launch(options);
 
     if (!browser) {
       throw new Error('Failed to launch browser');
@@ -42,7 +45,8 @@ export async function scrapeNews(searchQuery?: string) {
 
     console.log('Navigating to:', url);
     await page.goto(url, {
-      waitUntil: ['domcontentloaded', 'networkidle0']
+      waitUntil: ['domcontentloaded', 'networkidle0'],
+      timeout: 30000
     });
 
     await new Promise(resolve => setTimeout(resolve, 5000));
@@ -72,10 +76,11 @@ export async function scrapeNews(searchQuery?: string) {
     for (const { title, cryptopanicLink } of newsLinks) {
       try {
         await page.goto(cryptopanicLink, {
-          waitUntil: ['domcontentloaded', 'networkidle0']
+          waitUntil: ['domcontentloaded', 'networkidle0'],
+          timeout: 30000
         });
         
-        await page.waitForSelector('.description-body');
+        await page.waitForSelector('.description-body', { timeout: 10000 });
         
         const contentElements = await page.$$('.description-body p');
         const contentParts = await Promise.all(
