@@ -15,15 +15,22 @@ export async function scrapeNews(searchQuery?: string) {
 
   try {
     console.log('Launching chrome headless');
+
+    // Get the Chrome path
+    const executablePath = process.env.CHROME_EXECUTABLE_PATH || (await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v119.0.0/chromium-v119.0.0-pack.tar'));
+    console.log('Chrome executable path:', executablePath);
     
     browser = await puppeteer.launch({
-      args: [...chromium.args, '--no-sandbox'],
-      executablePath: await chromium.executablePath(),
-      headless: true,
-      defaultViewport: {
-        width: 1920,
-        height: 1080
-      }
+      args: [
+        ...chromium.args,
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--single-process'
+      ],
+      executablePath,
+      defaultViewport: chromium.defaultViewport,
+      ignoreHTTPSErrors: true
     });
 
     if (!browser) {
