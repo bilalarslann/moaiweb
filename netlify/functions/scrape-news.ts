@@ -1,33 +1,20 @@
 import { Handler } from '@netlify/functions';
 import { scrapeNews } from '../../scripts/test-scraping';
 
-const handler: Handler = async (event) => {
+export const handler: Handler = async (event) => {
   try {
-    // Query parametresini al
-    const query = event.queryStringParameters?.query || 'bitcoin';
-    
-    // Haberleri çek
-    const news = await scrapeNews(query);
+    const { searchQuery } = JSON.parse(event.body || '{}');
+    const results = await scrapeNews(searchQuery);
     
     return {
       statusCode: 200,
-      body: JSON.stringify({ success: true, data: news }),
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      }
+      body: JSON.stringify(results)
     };
   } catch (error) {
-    console.error('Error in scrape-news function:', error);
+    console.error('Error:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ success: false, error: 'Internal server error' }),
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      }
+      body: JSON.stringify({ error: 'Failed to scrape news' })
     };
   }
-};
-
-export { handler }; 
+}; 
