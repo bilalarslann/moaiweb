@@ -1,34 +1,38 @@
 import { Handler } from '@netlify/functions';
-import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
+import puppeteer from 'puppeteer-core';
 
-interface NewsItem {
+type NewsItem = {
   title: string;
   content: string;
   sourceText: string;
   sourceUrl: string;
-}
+};
 
-export const handler: Handler = async (event) => {
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: 'Method Not Allowed'
-    };
-  }
-
-  const { searchQuery } = JSON.parse(event.body || '{}');
-  let browser;
+const handler: Handler = async (event) => {
+  let browser = null;
+  const newsItems: NewsItem[] = [];
 
   try {
-    console.log('Launching browser...');
+    if (event.httpMethod !== 'POST') {
+      return {
+        statusCode: 405,
+        body: JSON.stringify({ error: 'Method not allowed' })
+      };
+    }
+
+    const body = JSON.parse(event.body || '{}');
+    const { searchQuery } = body;
+
+    console.log('Setting up chromium');
+    await chromium.font('https://raw.githack.com/googlei18n/noto-emoji/master/fonts/NotoColorEmoji.ttf');
     
     browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
       headless: true,
-      ignoreHTTPSErrors: true
+      ignoreHTTPSErrors: true,
     });
 
     const page = await browser.newPage();
@@ -41,23 +45,21 @@ export const handler: Handler = async (event) => {
 
     console.log('Fetching news for query:', searchQuery);
     await page.goto(`https://cryptopanic.com/news?search=${encodeURIComponent(searchQuery)}`, {
-      waitUntil: 'networkidle0',
-      timeout: 60000 // We can use longer timeouts now
+      waitUntil: ['domcontentloaded', 'networkidle0'],
+      timeout: 30000
     });
 
-    await new Promise(resolve => setTimeout(resolve, 8000));
+    await new Promise(resolve => setTimeout(resolve, 5000));
 
     await page.evaluate(() => {
       window.scrollBy(0, window.innerHeight);
     });
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    const newsItems: NewsItem[] = [];
+    await new Promise(resolve => setTimeout(resolve, 2000));
     
     // Get all the links first
     const titleElements = await page.$$('.title-text');
     const newsLinks = await Promise.all(
-      titleElements.slice(0, 5).map(async (el) => { // Back to 5 items
+      titleElements.slice(0, 5).map(async (el) => {
         const title = await el.evaluate((node: Element) => {
           const sourceElement = node.querySelector('.si-source-name');
           if (sourceElement) {
@@ -73,8 +75,12 @@ export const handler: Handler = async (event) => {
     // Now visit each link and get the content
     for (const { title, cryptopanicLink } of newsLinks) {
       try {
-        await page.goto(cryptopanicLink, { waitUntil: 'networkidle0', timeout: 60000 });
-        await page.waitForSelector('.description-body', { timeout: 15000 });
+        await page.goto(cryptopanicLink, {
+          waitUntil: ['domcontentloaded', 'networkidle0'],
+          timeout: 30000
+        });
+        
+        await page.waitForSelector('.description-body', { timeout: 10000 });
         
         const contentElements = await page.$$('.description-body p');
         const contentParts = await Promise.all(
@@ -108,21 +114,30 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    console.log(`Successfully scraped ${newsItems.length} news items`);
     return {
       statusCode: 200,
-      body: JSON.stringify(newsItems)
+      body: JSON.stringify(newsItems),
+      headers: {
+        'Content-Type': 'application/json'
+      }
     };
-
-  } catch (err: any) {
-    console.error('Error scraping CryptoPanic:', err.message);
+  } catch (error) {
+    console.error('Error in scrape-news function:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: err.message })
+      body: JSON.stringify({
+        error: 'Failed to scrape news',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }),
+      headers: {
+        'Content-Type': 'application/json'
+      }
     };
   } finally {
     if (browser) {
       await browser.close();
     }
   }
-}; 
+};
+
+export { handler }; 

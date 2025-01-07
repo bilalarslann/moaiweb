@@ -1,21 +1,20 @@
 import { NextResponse } from 'next/server';
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     console.log('Sending request to Netlify function with body:', body);
     
-    // Call the Netlify background function
-    const response = await axios.post('/.netlify/functions/scrape-news-background', body);
-    console.log('Received response from Netlify function:', response.data);
+    // Call the Netlify function
+    const response = await axios.post('/.netlify/functions/scrape-news', body);
     
     return NextResponse.json(response.data);
   } catch (error) {
     console.error('Error in scrape route:', error);
     
     // Handle Axios errors
-    if (error instanceof AxiosError) {
+    if (axios.isAxiosError(error)) {
       const errorDetails = error.response?.data || error.message;
       console.error('Axios error details:', errorDetails);
       
@@ -27,10 +26,7 @@ export async function POST(request: Request) {
     
     // Handle other errors
     return NextResponse.json(
-      { 
-        error: 'Failed to scrape news',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { error: 'Failed to scrape news', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
