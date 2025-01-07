@@ -8,7 +8,10 @@ const nextConfig = {
   },
   webpack: (config, { isServer }) => {
     if (isServer) {
-      config.externals = [...config.externals, 'puppeteer-core', '@sparticuz/chromium'];
+      config.externals.push({
+        'puppeteer-core': 'puppeteer-core',
+        '@sparticuz/chromium': '@sparticuz/chromium'
+      });
     }
     return config;
   }
