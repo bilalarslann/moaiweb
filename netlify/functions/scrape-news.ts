@@ -22,13 +22,13 @@ const handler: Handler = async (event) => {
     }
 
     const body = JSON.parse(event.body || '{}');
-    const { searchQuery } = body;
+    const searchQuery = body.searchQuery || 'crypto'; // Default to 'crypto' if no query provided
 
     console.log('Setting up chromium');
     await chromium.font('https://raw.githack.com/googlei18n/noto-emoji/master/fonts/NotoColorEmoji.ttf');
     
     browser = await puppeteer.launch({
-      args: chromium.args,
+      args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
       headless: true,
@@ -37,14 +37,16 @@ const handler: Handler = async (event) => {
 
     const page = await browser.newPage();
     
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
     
     await page.evaluateOnNewDocument(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => false });
     });
 
-    console.log('Fetching news for query:', searchQuery);
-    await page.goto(`https://cryptopanic.com/news?search=${encodeURIComponent(searchQuery)}`, {
+    const url = `https://cryptopanic.com/news/${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ''}`;
+    console.log('Fetching news from:', url);
+    
+    await page.goto(url, {
       waitUntil: ['domcontentloaded', 'networkidle0'],
       timeout: 30000
     });
@@ -58,6 +60,18 @@ const handler: Handler = async (event) => {
     
     // Get all the links first
     const titleElements = await page.$$('.title-text');
+    
+    if (titleElements.length === 0) {
+      console.log('No news found, returning empty array');
+      return {
+        statusCode: 200,
+        body: JSON.stringify([]),
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      };
+    }
+
     const newsLinks = await Promise.all(
       titleElements.slice(0, 5).map(async (el) => {
         const title = await el.evaluate((node: Element) => {
@@ -75,6 +89,11 @@ const handler: Handler = async (event) => {
     // Now visit each link and get the content
     for (const { title, cryptopanicLink } of newsLinks) {
       try {
+        if (!cryptopanicLink) {
+          console.log('Skipping article with no link:', title);
+          continue;
+        }
+
         await page.goto(cryptopanicLink, {
           waitUntil: ['domcontentloaded', 'networkidle0'],
           timeout: 30000
@@ -112,6 +131,17 @@ const handler: Handler = async (event) => {
         console.error(`Error processing article: ${title}`, err);
         continue;
       }
+    }
+
+    if (newsItems.length === 0) {
+      console.log('No news items were successfully processed');
+      return {
+        statusCode: 404,
+        body: JSON.stringify({ error: 'No news found', details: 'Could not process any news items' }),
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      };
     }
 
     return {
