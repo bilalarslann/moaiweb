@@ -9,6 +9,9 @@ type NewsItem = {
   sourceUrl: string;
 };
 
+export const maxDuration = 60; // Set max duration to 60 seconds
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   let browser = null;
   const newsItems: NewsItem[] = [];
@@ -18,17 +21,43 @@ export async function POST(request: Request) {
     console.log('Starting news scraping for query:', searchQuery);
 
     // Configure Chrome for Netlify environment
+    console.log('Setting up chromium');
     await chromium.font('https://raw.githack.com/googlei18n/noto-emoji/master/fonts/NotoColorEmoji.ttf');
     
     browser = await puppeteer.launch({
-      args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
-      defaultViewport: chromium.defaultViewport,
+      args: [
+        ...chromium.args,
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu',
+        '--single-process'
+      ],
+      defaultViewport: {
+        width: 1920,
+        height: 1080
+      },
       executablePath: await chromium.executablePath(),
       headless: true,
       ignoreHTTPSErrors: true,
     });
 
+    console.log('Browser launched successfully');
     const page = await browser.newPage();
+    
+    // Block unnecessary resources
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      const resourceType = request.resourceType();
+      if (['image', 'stylesheet', 'font', 'media'].includes(resourceType)) {
+        request.abort();
+      } else {
+        request.continue();
+      }
+    });
     
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
     
@@ -40,16 +69,12 @@ export async function POST(request: Request) {
     console.log('Fetching news from:', url);
     
     await page.goto(url, {
-      waitUntil: ['domcontentloaded', 'networkidle0'],
-      timeout: 30000
+      waitUntil: 'networkidle0',
+      timeout: 15000
     });
 
-    await new Promise(resolve => setTimeout(resolve, 5000));
-
-    await page.evaluate(() => {
-      window.scrollBy(0, window.innerHeight);
-    });
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    console.log('Page loaded, waiting for content');
+    await page.waitForSelector('.title-text', { timeout: 10000 });
     
     // Get all the links first
     const titleElements = await page.$$('.title-text');
@@ -60,7 +85,7 @@ export async function POST(request: Request) {
     }
 
     const newsLinks = await Promise.all(
-      titleElements.slice(0, 5).map(async (el) => {
+      titleElements.slice(0, 3).map(async (el) => { // Reduced to 3 articles for faster processing
         const title = await el.evaluate((node: Element) => {
           const sourceElement = node.querySelector('.si-source-name');
           if (sourceElement) {
@@ -81,28 +106,27 @@ export async function POST(request: Request) {
           continue;
         }
 
+        console.log(`Processing article: ${title}`);
         await page.goto(cryptopanicLink, {
-          waitUntil: ['domcontentloaded', 'networkidle0'],
-          timeout: 30000
+          waitUntil: 'networkidle0',
+          timeout: 15000
         });
         
         await page.waitForSelector('.description-body', { timeout: 10000 });
         
-        const contentElements = await page.$$('.description-body p');
-        const contentParts = await Promise.all(
-          contentElements.map(el => el.evaluate((node: Element) => node.textContent || ''))
-        );
-        const content = contentParts.join('\n');
+        const { content, sourceInfo } = await page.evaluate(() => {
+          const contentElements = document.querySelectorAll('.description-body p');
+          const content = Array.from(contentElements)
+            .map(el => el.textContent || '')
+            .join('\n');
 
-        const sourceInfo = await page.evaluate(() => {
           const sourceLink = document.querySelector('.post-source-link');
-          if (!sourceLink) return null;
-          
-          const text = sourceLink.textContent || '';
-          return {
-            text: text,
-            url: `https://${text}`
-          };
+          const sourceInfo = sourceLink ? {
+            text: sourceLink.textContent || '',
+            url: `https://${sourceLink.textContent || ''}`
+          } : null;
+
+          return { content, sourceInfo };
         });
 
         if (title && content && sourceInfo) {
@@ -125,6 +149,7 @@ export async function POST(request: Request) {
       return NextResponse.json([]);
     }
 
+    console.log(`Successfully processed ${newsItems.length} articles`);
     return NextResponse.json(newsItems);
   } catch (error) {
     console.error('Error in scrape route:', error);
@@ -135,6 +160,7 @@ export async function POST(request: Request) {
   } finally {
     if (browser) {
       await browser.close();
+      console.log('Browser closed');
     }
   }
 } 
