@@ -18,25 +18,20 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 const API_KEY = 'ddf611817dcfbf62abc6d209272f4afccefc7d98';
+const BASE_URL = 'https://cryptopanic.com/api/v1/posts/';
 
 export async function POST(request: Request) {
   try {
     const { searchQuery } = await request.json();
     console.log('Starting news fetching for query:', searchQuery);
 
-    // Construct the API URL based on search query
-    let url = `https://cryptopanic.com/api/v1/posts/?auth_token=${API_KEY}&public=true&kind=news`;
-    
-    if (searchQuery) {
-      // If searchQuery is provided, use it as a currency filter
-      url += `&currencies=${encodeURIComponent(searchQuery.toUpperCase())}`;
-    }
+    // Use the basic API URL
+    const url = `${BASE_URL}?auth_token=${API_KEY}`;
     
     console.log('Fetching news from CryptoPanic');
     const response = await fetch(url, {
       headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+        'Accept': 'application/json'
       }
     });
 
