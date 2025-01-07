@@ -1,7 +1,6 @@
 [build]
   command = "npm run build"
   publish = ".next"
-  functions = "netlify/functions"
 
 [build.environment]
   NEXT_USE_NETLIFY_EDGE = "true"
@@ -10,11 +9,6 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-[functions]
-  node_bundler = "esbuild"
-  external_node_modules = ["@sparticuz/chromium", "puppeteer-core"]
-  included_files = ["node_modules/@sparticuz/chromium-*/**"]
-  
-[functions."*"]
-  timeout = 60
-  memory = 2048 
+[[edge_functions]]
+  function = "scrape"
+  path = "/api/scrape" 
