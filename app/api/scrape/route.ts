@@ -17,16 +17,22 @@ type CryptoPanicResult = {
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
+const API_KEY = 'ddf611817dcfbf62abc6d209272f4afccefc7d98';
+
 export async function POST(request: Request) {
   try {
     const { searchQuery } = await request.json();
     console.log('Starting news fetching for query:', searchQuery);
 
-    // Fetch news from CryptoPanic API
-    const apiKey = process.env.CRYPTOPANIC_API_KEY || '';
-    const url = `https://cryptopanic.com/api/v1/posts/?auth_token=${apiKey}&currencies=${searchQuery || 'BTC'}&kind=news&filter=important`;
+    // Construct the API URL based on search query
+    let url = `https://cryptopanic.com/api/v1/posts/?auth_token=${API_KEY}&public=true&kind=news`;
     
-    console.log('Fetching news from:', url);
+    if (searchQuery) {
+      // If searchQuery is provided, use it as a currency filter
+      url += `&currencies=${encodeURIComponent(searchQuery.toUpperCase())}`;
+    }
+    
+    console.log('Fetching news from CryptoPanic');
     const response = await fetch(url, {
       headers: {
         'Accept': 'application/json',
@@ -34,11 +40,13 @@ export async function POST(request: Request) {
       }
     });
 
+    const data = await response.json();
+
     if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
+      console.error('API Error Response:', data);
+      throw new Error(`API request failed with status ${response.status}: ${JSON.stringify(data)}`);
     }
 
-    const data = await response.json();
     console.log('Received response from API');
 
     if (!data.results || !Array.isArray(data.results)) {
@@ -56,6 +64,11 @@ export async function POST(request: Request) {
         sourceUrl: item.url || ''
       }))
       .filter((item: NewsItem) => item.title && item.content);
+
+    if (newsItems.length === 0) {
+      console.log('No valid news items found after processing');
+      return NextResponse.json([]);
+    }
 
     console.log(`Successfully processed ${newsItems.length} articles`);
     return NextResponse.json(newsItems);
