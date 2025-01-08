@@ -1,71 +1,55 @@
 import { NextResponse } from 'next/server';
-import axios from 'axios';
-import { JSDOM } from 'jsdom';
-import OpenAI from 'openai';
+import Parser from 'rss-parser';
 
-const openai = new OpenAI({
-  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
+type CustomItem = {
+  title: string;
+  link: string;
+  contentSnippet?: string;
+  pubDate?: string;
+  creator?: string;
+  source?: string;
+  media?: {
+    $: {
+      url: string;
+    };
+  };
+};
+
+const parser = new Parser<CustomItem>({
+  customFields: {
+    item: [
+      ['media:content', 'media'],
+      ['source', 'source']
+    ],
+  },
 });
 
-export async function POST(req: Request) {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const query = searchParams.get('q');
+
+  if (!query) {
+    return NextResponse.json({ error: 'Query parameter is required' }, { status: 400 });
+  }
+
   try {
-    const { query, language } = await req.json();
-
-    // Scrape news from CryptoNews
-    const response = await axios.get('https://cryptonews.com/');
-    const dom = new JSDOM(response.data);
-    const articles = dom.window.document.querySelectorAll('article.mb-30');
-    
-    let newsItems = Array.from(articles).map(article => {
-      const titleElement = article.querySelector('a');
-      const title = titleElement?.textContent?.trim() || '';
-      const link = titleElement?.href || '';
-      return { title, link };
-    }).slice(0, 5); // Get only first 5 news items
-
-    // Translate and format news based on language
-    const prompt = language === 'tr' 
-      ? `Aşağıdaki kripto haberlerini Türkçe'ye çevir ve özetle. Her haber için başlığı ve kısa bir özet yaz. Teknik terimleri ve kripto para birimlerinin isimlerini olduğu gibi bırak.
-
-Haberler:
-${newsItems.map(item => `${item.title}\n${item.link}`).join('\n\n')}
-
-Çeviri ve özet formatı:
-📰 [Türkçe Başlık]
-[Türkçe özet - 1-2 cümle]
-🔗 [Link]`
-      : `Summarize the following crypto news in English. For each news item, write the title and a brief summary. Keep technical terms and cryptocurrency names unchanged.
-
-News:
-${newsItems.map(item => `${item.title}\n${item.link}`).join('\n\n')}
-
-Summary format:
-📰 [Title]
-[Summary in 1-2 sentences]
-🔗 [Link]`;
-
-    const completion = await openai.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: language === 'tr'
-            ? "Sen profesyonel bir kripto haber editörüsün. Haberleri Türkçe'ye çevirip özetliyorsun."
-            : "You are a professional crypto news editor. You summarize news in English."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      model: "gpt-4-turbo-preview",
-    });
-
-    return NextResponse.json({ content: completion.choices[0]?.message?.content || 'No news found.' });
-  } catch (error) {
-    console.error('Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch news' },
-      { status: 500 }
+    // Google News RSS feed'ini kullan
+    const feed = await parser.parseURL(
+      `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`
     );
+
+    const news_results = feed.items.map(item => ({
+      title: item.title,
+      link: item.link,
+      snippet: item.contentSnippet || '',
+      date: item.pubDate || new Date().toISOString(),
+      source: item.source || item.creator || '',
+      thumbnail: item.media ? item.media.$.url : null
+    }));
+
+    return NextResponse.json({ news_results });
+  } catch (error) {
+    console.error('Error fetching news:', error);
+    return NextResponse.json({ error: 'Failed to fetch news' }, { status: 500 });
   }
 } 

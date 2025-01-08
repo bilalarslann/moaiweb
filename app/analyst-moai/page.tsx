@@ -19,6 +19,213 @@ const openai = new OpenAI({
   dangerouslyAllowBrowser: true
 });
 
+// TradingView sembol önbellek sistemi
+let symbolCache: Map<string, string> = new Map();
+let lastCacheTime: number = 0;
+const CACHE_DURATION = 1000 * 60 * 60; // 1 saat
+
+// TradingView'den sembol arama
+const searchTradingViewSymbol = async (query: string): Promise<string> => {
+  try {
+    // Önbellekte varsa ve tazeyse, önbellekten döndür
+    const cacheKey = query.toLowerCase();
+    const now = Date.now();
+    if (symbolCache.has(cacheKey) && (now - lastCacheTime) < CACHE_DURATION) {
+      return symbolCache.get(cacheKey)!;
+    }
+
+    // TradingView sembol arama API'sini kullan
+    const response = await fetch(`https://symbol-search.tradingview.com/symbol_search/?text=${encodeURIComponent(query)}&type=crypto`);
+    const data = await response.json();
+
+    if (data && data.length > 0) {
+      // En iyi eşleşmeyi bul
+      const bestMatch = data.find((item: any) => 
+        item.type === "crypto" && 
+        (item.symbol.toLowerCase().includes(query.toLowerCase()) ||
+         item.description.toLowerCase().includes(query.toLowerCase()))
+      );
+
+      if (bestMatch) {
+        // Sembolü önbelleğe al
+        const symbol = bestMatch.symbol;
+        symbolCache.set(cacheKey, symbol);
+        lastCacheTime = now;
+        console.log(`Found TradingView symbol for "${query}":`, symbol);
+        return symbol;
+      }
+    }
+
+    // Eşleşme bulunamazsa orijinal girdiyi döndür
+    console.log(`No TradingView symbol found for "${query}", using as is`);
+    return query.toUpperCase();
+  } catch (error) {
+    console.error('Error searching TradingView symbol:', error);
+    return query.toUpperCase();
+  }
+};
+
+// Coin sembolünü doğru exchange ile birleştiren yardımcı fonksiyon
+const getFormattedSymbol = async (symbol: string): Promise<string> => {
+  try {
+    // TradingView'den doğru sembolü al
+    const tradingViewSymbol = await searchTradingViewSymbol(symbol);
+    
+    // Eğer sembol zaten exchange içeriyorsa (örn: BINANCE:BTCUSDT) direkt döndür
+    if (tradingViewSymbol.includes(':')) {
+      return tradingViewSymbol;
+    }
+
+    // Sembolü temizle
+    const cleanSymbol = tradingViewSymbol.replace(/[^A-Z0-9]/g, '');
+
+    // Tüm borsaları ve işlem hacimlerini kontrol et
+    const exchanges: { symbol: string; volume: number }[] = [];
+
+    // Binance'da kontrol et
+    try {
+      const binanceResponse = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${cleanSymbol}USDT`);
+      if (binanceResponse.ok) {
+        const data = await binanceResponse.json();
+        if (data.volume) {
+          exchanges.push({
+            symbol: `BINANCE:${cleanSymbol}USDT`,
+            volume: parseFloat(data.volume) * parseFloat(data.lastPrice)
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Binance API error:', e);
+    }
+
+    // KuCoin'de kontrol et
+    try {
+      const kucoinResponse = await fetch(`https://api.kucoin.com/api/v1/market/stats?symbol=${cleanSymbol}-USDT`);
+      if (kucoinResponse.ok) {
+        const data = await kucoinResponse.json();
+        if (data.data?.volValue) {
+          exchanges.push({
+            symbol: `KUCOIN:${cleanSymbol}USDT`,
+            volume: parseFloat(data.data.volValue)
+          });
+        }
+      }
+    } catch (e) {
+      console.error('KuCoin API error:', e);
+    }
+
+    // MEXC'de kontrol et
+    try {
+      const mexcResponse = await fetch(`https://api.mexc.com/api/v3/ticker/24hr?symbol=${cleanSymbol}USDT`);
+      if (mexcResponse.ok) {
+        const data = await mexcResponse.json();
+        if (data.volume) {
+          exchanges.push({
+            symbol: `MEXC:${cleanSymbol}USDT`,
+            volume: parseFloat(data.volume) * parseFloat(data.lastPrice)
+          });
+        }
+      }
+    } catch (e) {
+      console.error('MEXC API error:', e);
+    }
+
+    // Gate.io'da kontrol et
+    try {
+      const gateResponse = await fetch(`https://api.gateio.ws/api/v4/spot/tickers?currency_pair=${cleanSymbol}_USDT`);
+      if (gateResponse.ok) {
+        const data = await gateResponse.json();
+        if (data[0]?.quote_volume) {
+          exchanges.push({
+            symbol: `GATE:${cleanSymbol}USDT`,
+            volume: parseFloat(data[0].quote_volume)
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Gate.io API error:', e);
+    }
+
+    // OKX'de kontrol et
+    try {
+      const okxResponse = await fetch(`https://www.okx.com/api/v5/market/ticker?instId=${cleanSymbol}-USDT`);
+      if (okxResponse.ok) {
+        const data = await okxResponse.json();
+        if (data.data?.[0]?.volCcy24h) {
+          exchanges.push({
+            symbol: `OKX:${cleanSymbol}USDT`,
+            volume: parseFloat(data.data[0].volCcy24h)
+          });
+        }
+      }
+    } catch (e) {
+      console.error('OKX API error:', e);
+    }
+
+    // Huobi'de kontrol et
+    try {
+      const huobiResponse = await fetch(`https://api.huobi.pro/market/detail?symbol=${cleanSymbol.toLowerCase()}usdt`);
+      if (huobiResponse.ok) {
+        const data = await huobiResponse.json();
+        if (data.tick?.vol) {
+          exchanges.push({
+            symbol: `HUOBI:${cleanSymbol}USDT`,
+            volume: parseFloat(data.tick.vol)
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Huobi API error:', e);
+    }
+
+    // Bitget'de kontrol et
+    try {
+      const bitgetResponse = await fetch(`https://api.bitget.com/api/spot/v1/market/ticker?symbol=${cleanSymbol}USDT`);
+      if (bitgetResponse.ok) {
+        const data = await bitgetResponse.json();
+        if (data.data?.usdtVol) {
+          exchanges.push({
+            symbol: `BITGET:${cleanSymbol}USDT`,
+            volume: parseFloat(data.data.usdtVol)
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Bitget API error:', e);
+    }
+
+    // Gemini'de kontrol et (USD çiftleri için)
+    try {
+      const geminiResponse = await fetch(`https://api.gemini.com/v1/pubticker/${cleanSymbol}usd`);
+      if (geminiResponse.ok) {
+        const data = await geminiResponse.json();
+        if (data.volume?.USD) {
+          exchanges.push({
+            symbol: `GEMINI:${cleanSymbol}USD`,
+            volume: parseFloat(data.volume.USD)
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Gemini API error:', e);
+    }
+
+    // En yüksek hacimli borsayı seç
+    if (exchanges.length > 0) {
+      exchanges.sort((a, b) => b.volume - a.volume);
+      console.log(`Found ${cleanSymbol} in exchanges:`, exchanges.map(e => `${e.symbol} (vol: ${e.volume})`));
+      return exchanges[0].symbol;
+    }
+
+    // Hiçbir borsada bulunamazsa, USDT eklenmiş sembolü döndür
+    return `${cleanSymbol}USDT`;
+  } catch (error) {
+    console.error('Error checking exchanges:', error);
+    // Hata durumunda USDT eklenmiş sembolü döndür
+    return `${symbol.toUpperCase()}USDT`;
+  }
+};
+
 // TradingView types
 declare global {
   interface Window {
@@ -66,7 +273,6 @@ const TradingViewWidget = ({ symbol, interval = '1D', onChartReady, isFullscreen
   onChartReady?: (widget: any) => void,
   isFullscreen?: boolean 
 }) => {
-  const [currentSymbol, setCurrentSymbol] = useState(`BINANCE:${symbol}USDT`);
   const widgetRef = useRef<any>(null);
   // Generate a unique ID for each widget instance
   const containerId = useRef(`tradingview_${symbol}_${Math.random().toString(36).substring(7)}`);
@@ -85,7 +291,7 @@ const TradingViewWidget = ({ symbol, interval = '1D', onChartReady, isFullscreen
           widget = new window.TradingView.widget({
             width: "100%",
             height: isFullscreen ? window.innerHeight : 400,
-            symbol: currentSymbol,
+            symbol: symbol,
             interval: interval,
             timezone: "exchange",
             theme: "dark",
@@ -214,7 +420,7 @@ const TradingViewWidget = ({ symbol, interval = '1D', onChartReady, isFullscreen
       }
       widgetRef.current = null;
     };
-  }, [symbol, interval, currentSymbol, onChartReady, isFullscreen]);
+  }, [symbol, interval, onChartReady, isFullscreen]);
 
   return (
     <div className="tradingview-widget-container h-full">
@@ -352,21 +558,23 @@ export default function AnalistMoai() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    
+    if (!input.trim()) return;
 
-    const userMessage = input;
+    const userMessage = input.trim();
     setInput('');
     setIsLoading(true);
 
-    setMessages(prev => [...prev, { type: 'user', content: userMessage }]);
-
     try {
-      // First, detect the language of the user's message
-      const languageDetection = await openai.chat.completions.create({
+      // Add user message
+      setMessages(prev => [...prev, { type: 'user', content: userMessage }]);
+
+      // Detect language
+      const languageCompletion = await openai.chat.completions.create({
         messages: [
           {
             role: "system",
-            content: `You are a language detector. Analyze the given text and return ONLY "tr" for Turkish or "en" for English in your response. Nothing else.`
+            content: "You are a language detector. Respond with 'tr' for Turkish text and 'en' for English text."
           },
           {
             role: "user",
@@ -374,17 +582,19 @@ export default function AnalistMoai() {
           }
         ],
         model: "gpt-3.5-turbo",
+        max_tokens: 1
       });
 
-      const detectedLanguage = languageDetection.choices[0]?.message?.content?.trim().toLowerCase() as 'en' | 'tr';
-      setUserLanguage(detectedLanguage);
+      const detectedLanguage = languageCompletion.choices[0]?.message?.content?.toLowerCase() || 'en';
+      setUserLanguage(detectedLanguage as 'en' | 'tr');
 
+      // Extract symbol from message
       const symbolCompletion = await openai.chat.completions.create({
         messages: [
           {
             role: "system",
-            content: detectedLanguage === 'tr' ? 
-              `Verilen mesajdan kripto para sembolünü ve grafik gösterme isteğini çıkar. Cevabı JSON formatında dön.
+            content: detectedLanguage === 'tr' ?
+              `Verilen mesajdan kripto para sembolünü ve grafik gösterme isteğini çıkar. Cevabı JSON formatında döndür.
               Örnek: { "symbol": "BTC", "showChart": true, "onlyChart": true/false }
               
               Eğer mesaj şu durumlardan birini içeriyorsa, showChart true olmalı:
@@ -393,15 +603,19 @@ export default function AnalistMoai() {
               - Destek/direnç analizi isteği
               - Fiyat analizi isteği
               - Trend analizi isteği
+              - Sadece coin ismi/sembolü (örn: "BTC" veya "Bitcoin" veya "GOAT")
               
-              Eğer mesaj sadece grafiği göstermeyi istiyorsa, onlyChart true olmalı.
-              Örnek mesajlar ve cevaplar:
+              Eğer mesaj sadece grafiği göstermeyi istiyorsa veya sadece coin ismi/sembolü ise, onlyChart false olmalı.
+              
+              Örnek mesajlar ve cevapları:
               "Bitcoin grafiğini göster" -> { "symbol": "BTC", "showChart": true, "onlyChart": true }
-              "BTC grafiği" -> { "symbol": "BTC", "showChart": true, "onlyChart": true }
+              "Sadece BTC grafik" -> { "symbol": "BTC", "showChart": true, "onlyChart": true }
               "BTC nasıl?" -> { "symbol": "BTC", "showChart": true, "onlyChart": false }
-              "Ethereum'u analiz et" -> { "symbol": "ETH", "showChart": true, "onlyChart": false }
+              "Ethereum analiz et" -> { "symbol": "ETH", "showChart": true, "onlyChart": false }
               "Bitcoin'in destek ve direnç seviyeleri nedir?" -> { "symbol": "BTC", "showChart": true, "onlyChart": false }
-              "Kripto paralar hakkında bilgi ver" -> { "symbol": null, "showChart": false, "onlyChart": false }
+              "GOAT" -> { "symbol": "GOAT", "showChart": true, "onlyChart": false }
+              "BTC" -> { "symbol": "BTC", "showChart": true, "onlyChart": false }
+              "Kripto paralar hakkında konuşalım" -> { "symbol": null, "showChart": false, "onlyChart": false }
               "Merhaba" -> { "symbol": null, "showChart": false, "onlyChart": false }` :
               `Extract the cryptocurrency symbol and chart display request from the given message. Return the answer in JSON format.
               Example: { "symbol": "BTC", "showChart": true, "onlyChart": true/false }
@@ -412,15 +626,19 @@ export default function AnalistMoai() {
               - Support/resistance analysis request
               - Price analysis request
               - Trend analysis request
+              - Just coin name/symbol (e.g., "BTC" or "Bitcoin" or "GOAT")
               
-              If the message only requests to show the chart, onlyChart should be true.
+              If the message only requests to show the chart or is just a coin name/symbol, onlyChart should be false.
+              
               Example messages and responses:
               "Show Bitcoin chart" -> { "symbol": "BTC", "showChart": true, "onlyChart": true }
               "Just BTC chart" -> { "symbol": "BTC", "showChart": true, "onlyChart": true }
               "How's BTC?" -> { "symbol": "BTC", "showChart": true, "onlyChart": false }
               "Analyze Ethereum" -> { "symbol": "ETH", "showChart": true, "onlyChart": false }
               "What are Bitcoin's support and resistance levels?" -> { "symbol": "BTC", "showChart": true, "onlyChart": false }
-              "Tell me about cryptocurrencies" -> { "symbol": null, "showChart": false, "onlyChart": false }
+              "GOAT" -> { "symbol": "GOAT", "showChart": true, "onlyChart": false }
+              "BTC" -> { "symbol": "BTC", "showChart": true, "onlyChart": false }
+              "Let's talk about cryptocurrencies" -> { "symbol": null, "showChart": false, "onlyChart": false }
               "Hello" -> { "symbol": null, "showChart": false, "onlyChart": false }`
           },
           {
@@ -443,170 +661,181 @@ export default function AnalistMoai() {
       const onlyChart = response.onlyChart;
 
       if (showChart && symbol) {
+        // Get formatted symbol with correct exchange
+        const formattedSymbol = await getFormattedSymbol(symbol);
+        
         // First, send just the chart
         setMessages(prev => [...prev, {
           type: 'bot',
           content: '',
           chart: {
-            symbol: symbol
+            symbol: formattedSymbol
           }
         }]);
 
         if (!onlyChart) {
-          try {
-            // Wait for chart to be ready
-            await new Promise(resolve => setTimeout(resolve, 2000));
+          // Wait for chart to be ready
+          await new Promise(resolve => setTimeout(resolve, 2000));
 
-            // Get chart data using Binance API
-            const chartData = await getChartData(symbol);
+          // Get chart data using Binance API
+          const chartData = await getChartData(symbol);
 
-            if (!chartData) {
-              throw new Error('Could not get chart data');
-            }
-
-            // Then send the analysis
-            const completion = await openai.chat.completions.create({
-              messages: [
-                {
-                  role: "system",
-                  content: detectedLanguage === 'tr' ? 
-                    `Sen ANALIST MOAI'sin, bir yapay zeka kripto analisti.
-                    Aşağıdaki gerçek zamanlı verileri kullanarak mevcut grafiği analiz et:
-
-                    Mevcut Veriler:
-                    - Fiyat: **${chartData.price}**
-                    - RSI: **${chartData.rsi?.toFixed(2)}**
-                    - SMA: **${chartData.sma?.toFixed(2)}**
-                    - Bollinger Bantları:
-                      * Üst: **${chartData.bb.upper?.toFixed(2)}**
-                      * Orta: **${chartData.bb.middle?.toFixed(2)}**
-                      * Alt: **${chartData.bb.lower?.toFixed(2)}**
-                    - Destek Seviyeleri: **${chartData.supports.map(s => s.toFixed(2)).join('**, **')}**
-                    - Direnç Seviyeleri: **${chartData.resistances.map(r => r.toFixed(2)).join('**, **')}**
-
-                    Detaylı bir teknik analiz sun. Her bölüm için yeni paragraf kullan.
-                    Analiz şu bölümleri içermeli (her biri yeni paragrafla başlamalı):
-
-                    1. MEVCUT DURUM VE TREND ANALİZİ
-                    - Mevcut fiyat seviyesi
-                    - SMA'ya göre trend durumu (üstünde veya altında)
-                    - Genel trend yönü
-
-                    2. RSI ANALİZİ
-                    - RSI değeri ve anlamı
-                    - Aşırı alım/satım durumları
-                    - Momentum değerlendirmesi
-
-                    3. BOLLINGER BANT ANALİZİ
-                    - Fiyatın bantlara göre konumu
-                    - Volatilite durumu
-                    - Olası sıkışma/genişleme
-
-                    4. DESTEK VE DİRENÇ SEVİYELERİ
-                    - En yakın destek seviyeleri ve önemi
-                    - En yakın direnç seviyeleri ve önemi
-                    - Kritik seviyeler
-
-                    5. GENEL DEĞERLENDİRME VE SENARYOLAR
-                    - Kısa vadeli beklentiler
-                    - Olası senaryolar
-                    - Takip edilecek seviyeler
-
-                    Her bölüme "📊", "📈", "💹", "🎯", "💡" gibi uygun emojilerle başla.
-                    Önemli sayısal değerleri ve kritik seviyeleri **kalın** yaz.
-                    Paragraflar arasında boş satır bırak.
-                    Markdown formatını kullan (örnek: **kalın metin**).
-
-                    Son olarak, ayrı bir paragrafta şu notu ekle:
-
-                    ⚠️ Bu analiz sadece eğitim amaçlıdır, yatırım tavsiyesi değildir.` :
-                    `You are ANALYST MOAI, an AI cryptocurrency analyst assistant.
-                    Analyze the current chart using the following real-time data:
-
-                    Current Data:
-                    - Price: **${chartData.price}**
-                    - RSI: **${chartData.rsi?.toFixed(2)}**
-                    - SMA: **${chartData.sma?.toFixed(2)}**
-                    - Bollinger Bands:
-                      * Upper: **${chartData.bb.upper?.toFixed(2)}**
-                      * Middle: **${chartData.bb.middle?.toFixed(2)}**
-                      * Lower: **${chartData.bb.lower?.toFixed(2)}**
-                    - Support Levels: **${chartData.supports.map(s => s.toFixed(2)).join('**, **')}**
-                    - Resistance Levels: **${chartData.resistances.map(r => r.toFixed(2)).join('**, **')}**
-
-                    Provide a detailed technical analysis. Use new paragraphs for each section.
-                    The analysis should include these sections (each starting with a new paragraph):
-
-                    1. CURRENT STATUS AND TREND ANALYSIS
-                    - Current price level
-                    - Trend status relative to SMA (above or below)
-                    - General trend direction
-
-                    2. RSI ANALYSIS
-                    - RSI value and its meaning
-                    - Overbought/oversold conditions
-                    - Momentum assessment
-
-                    3. BOLLINGER BANDS ANALYSIS
-                    - Price position relative to bands
-                    - Volatility status
-                    - Potential squeeze/expansion
-
-                    4. SUPPORT AND RESISTANCE LEVELS
-                    - Nearest support levels and their significance
-                    - Nearest resistance levels and their significance
-                    - Critical levels
-
-                    5. OVERALL ASSESSMENT AND SCENARIOS
-                    - Short-term expectations
-                    - Possible scenarios
-                    - Levels to watch
-
-                    Start each section with appropriate emojis like "📊", "📈", "💹", "🎯", "💡".
-                    Use **bold** for important numerical values and critical levels.
-                    Leave a blank line between paragraphs.
-                    Use markdown format (example: **bold text**).
-
-                    Finally, add this note in a separate paragraph:
-
-                    ⚠️ This analysis is for educational purposes only, not financial advice.`
-                },
-                {
-                  role: "user",
-                  content: detectedLanguage === 'tr' ? 
-                    `${symbol} için detaylı teknik analiz yap.` :
-                    `Provide a detailed technical analysis for ${symbol}.`
-                }
-              ],
-              model: "gpt-3.5-turbo",
-            });
-
-            const botResponse = completion.choices[0]?.message?.content || 
-              (detectedLanguage === 'tr' ? "Üzgünüm, bir hata oluştu." : "Sorry, an error occurred.");
-            
-            setMessages(prev => [...prev, {
-              type: 'bot',
-              content: botResponse
-            }]);
-          } catch (error) {
-            console.error('Analysis error:', error);
-            setMessages(prev => [...prev, {
-              type: 'bot',
-              content: detectedLanguage === 'tr' ?
-                'Üzgünüm, analiz yaparken bir hata oluştu. Lütfen tekrar deneyin.' :
-                'Sorry, an error occurred during analysis. Please try again.'
-            }]);
+          if (!chartData) {
+            throw new Error('Could not get chart data');
           }
+
+          // Then send the analysis
+          const completion = await openai.chat.completions.create({
+            messages: [
+              {
+                role: "system",
+                content: detectedLanguage === 'tr' ? 
+                  `Sen ANALIST MOAI'sin, bir yapay zeka kripto analisti.
+                  Aşağıdaki gerçek zamanlı verileri kullanarak mevcut grafiği analiz et:
+
+                  Mevcut Veriler:
+                  - Fiyat: **${chartData.price}**
+                  - RSI: **${chartData.rsi?.toFixed(2)}**
+                  - SMA: **${chartData.sma?.toFixed(2)}**
+                  - Bollinger Bantları:
+                    * Üst: **${chartData.bb.upper?.toFixed(2)}**
+                    * Orta: **${chartData.bb.middle?.toFixed(2)}**
+                    * Alt: **${chartData.bb.lower?.toFixed(2)}**
+                  - Destek Seviyeleri: **${chartData.supports.map(s => s.toFixed(2)).join('**, **')}**
+                  - Direnç Seviyeleri: **${chartData.resistances.map(r => r.toFixed(2)).join('**, **')}**
+
+                  Detaylı bir teknik analiz sun. Her bölüm için yeni paragraf kullan.
+                  Analiz şu bölümleri içermeli (her biri yeni paragrafla başlamalı):
+
+                  1. MEVCUT DURUM VE TREND ANALİZİ
+                  - Mevcut fiyat seviyesi
+                  - SMA'ya göre trend durumu (üstünde veya altında)
+                  - Genel trend yönü
+
+                  2. RSI ANALİZİ
+                  - RSI değeri ve anlamı
+                  - Aşırı alım/satım durumları
+                  - Momentum değerlendirmesi
+
+                  3. BOLLINGER BANT ANALİZİ
+                  - Fiyatın bantlara göre konumu
+                  - Volatilite durumu
+                  - Olası sıkışma/genişleme
+
+                  4. DESTEK VE DİRENÇ SEVİYELERİ
+                  - En yakın destek seviyeleri ve önemi
+                  - En yakın direnç seviyeleri ve önemi
+                  - Kritik seviyeler
+
+                  5. GENEL DEĞERLENDİRME VE SENARYOLAR
+                  - Kısa vadeli beklentiler
+                  - Olası senaryolar
+                  - Takip edilecek seviyeler
+
+                  Her bölüme "📊", "📈", "💹", "🎯", "💡" gibi uygun emojilerle başla.
+                  Önemli sayısal değerleri ve kritik seviyeleri **kalın** yaz.
+                  Paragraflar arasında boş satır bırak.
+                  Markdown formatını kullan (örnek: **kalın metin**).
+
+                  Son olarak, ayrı bir paragrafta şu notu ekle:
+
+                  ⚠️ Bu analiz sadece eğitim amaçlıdır, yatırım tavsiyesi değildir.` :
+                  `You are ANALYST MOAI, an AI cryptocurrency analyst assistant.
+                  Analyze the current chart using the following real-time data:
+
+                  Current Data:
+                  - Price: **${chartData.price}**
+                  - RSI: **${chartData.rsi?.toFixed(2)}**
+                  - SMA: **${chartData.sma?.toFixed(2)}**
+                  - Bollinger Bands:
+                    * Upper: **${chartData.bb.upper?.toFixed(2)}**
+                    * Middle: **${chartData.bb.middle?.toFixed(2)}**
+                    * Lower: **${chartData.bb.lower?.toFixed(2)}**
+                  - Support Levels: **${chartData.supports.map(s => s.toFixed(2)).join('**, **')}**
+                  - Resistance Levels: **${chartData.resistances.map(r => r.toFixed(2)).join('**, **')}**
+
+                  Provide a detailed technical analysis. Use new paragraphs for each section.
+                  The analysis should include these sections (each starting with a new paragraph):
+
+                  1. CURRENT STATUS AND TREND ANALYSIS
+                  - Current price level
+                  - Trend status relative to SMA (above or below)
+                  - General trend direction
+
+                  2. RSI ANALYSIS
+                  - RSI value and its meaning
+                  - Overbought/oversold conditions
+                  - Momentum assessment
+
+                  3. BOLLINGER BANDS ANALYSIS
+                  - Price position relative to bands
+                  - Volatility status
+                  - Potential squeeze/expansion
+
+                  4. SUPPORT AND RESISTANCE LEVELS
+                  - Nearest support levels and their significance
+                  - Nearest resistance levels and their significance
+                  - Critical levels
+
+                  5. OVERALL ASSESSMENT AND SCENARIOS
+                  - Short-term expectations
+                  - Possible scenarios
+                  - Levels to watch
+
+                  Start each section with appropriate emojis like "📊", "📈", "💹", "🎯", "💡".
+                  Use **bold** for important numerical values and critical levels.
+                  Leave a blank line between paragraphs.
+                  Use markdown format (example: **bold text**).
+
+                  Finally, add this note in a separate paragraph:
+
+                  ⚠️ This analysis is for educational purposes only, not financial advice.`
+              },
+              {
+                role: "user",
+                content: detectedLanguage === 'tr' ? 
+                  `${symbol} için detaylı teknik analiz yap.` :
+                  `Provide a detailed technical analysis for ${symbol}.`
+              }
+            ],
+            model: "gpt-3.5-turbo",
+          });
+
+          const botResponse = completion.choices[0]?.message?.content || 
+            (detectedLanguage === 'tr' ? "Üzgünüm, analiz yaparken bir hata oluştu." : "Sorry, an error occurred during analysis.");
+
+          setMessages(prev => [...prev, {
+            type: 'bot',
+            content: botResponse
+          }]);
         }
       } else {
-        // Regular response without chart
+        // Handle non-chart messages
         const completion = await openai.chat.completions.create({
           messages: [
             {
               role: "system",
-              content: detectedLanguage === 'tr' ?
-                "Sen ANALİST MOAI adında bir kripto para analisti yapay zeka asistanısın. Kripto para piyasaları hakkında genel bilgi verebilirsin. Her zaman nazik ve yardımsever olmalısın. Cevaplarının sonuna 'Bu bilgiler sadece eğitim amaçlıdır, yatırım tavsiyesi değildir.' notunu eklemelisin." :
-                "You are ANALYST MOAI, an AI cryptocurrency analyst assistant. You can provide general information about cryptocurrency markets. Always be polite and helpful. Add the note 'This information is for educational purposes only, not investment advice.' at the end of your responses."
+              content: detectedLanguage === 'tr' ? 
+                `Sen ANALIST MOAI'sin, bir yapay zeka kripto analisti. Kripto para piyasaları hakkında bilgi ver ve soruları yanıtla.
+                
+                Yanıtlarında:
+                - Açık ve anlaşılır ol
+                - Teknik terimleri açıkla
+                - Önemli noktaları vurgula
+                - Uygun yerlerde emoji kullan
+                
+                Son olarak, eğer uygunsa, şu notu ekle:
+                ⚠️ Bu bilgiler sadece eğitim amaçlıdır, yatırım tavsiyesi değildir.` :
+                `You are ANALYST MOAI, an AI cryptocurrency analyst assistant. Provide information about cryptocurrency markets and answer questions.
+                
+                In your responses:
+                - Be clear and understandable
+                - Explain technical terms
+                - Emphasize important points
+                - Use emojis where appropriate
+                
+                Finally, if applicable, add this note:
+                ⚠️ This information is for educational purposes only, not financial advice.`
             },
             {
               role: "user",
@@ -618,16 +847,12 @@ export default function AnalistMoai() {
 
         const botResponse = completion.choices[0]?.message?.content || 
           (detectedLanguage === 'tr' ? "Üzgünüm, bir hata oluştu." : "Sorry, an error occurred.");
-        
+
         setMessages(prev => [...prev, {
           type: 'bot',
-          content: botResponse + "\n\n⚠️ " + 
-            (detectedLanguage === 'tr' ?
-              "Bu bilgiler sadece eğitim amaçlıdır, yatırım tavsiyesi değildir." :
-              "This information is for educational purposes only, not investment advice.")
+          content: botResponse
         }]);
       }
-
     } catch (error) {
       console.error('Error:', error);
       setMessages(prev => [...prev, {
@@ -636,9 +861,9 @@ export default function AnalistMoai() {
           'Üzgünüm, bir hata oluştu. Lütfen tekrar deneyin.' :
           'Sorry, an error occurred. Please try again.'
       }]);
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   return (
