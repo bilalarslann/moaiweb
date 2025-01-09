@@ -379,20 +379,13 @@ const TradingViewWidget = ({ symbol, interval = '1D', onChartReady, isFullscreen
             datafeed: {
               onReady: (callback: any) => {
                 callback({
-                  supported_resolutions: ["1", "5", "15", "30", "60", "240", "D", "W", "M"],
-                  supports_marks: false,
-                  supports_timescale_marks: false,
-                  supports_time: true,
-                  exchanges: [
-                    { value: "", name: "All Exchanges", desc: "" },
-                    { value: "BINANCE", name: "Binance", desc: "Binance" },
-                    { value: "KUCOIN", name: "KuCoin", desc: "KuCoin" }
-                  ],
-                  symbols_types: [{ name: "crypto", value: "crypto" }]
+                  supported_resolutions: ["1", "5", "15", "30", "60", "240", "D", "W", "M"]
                 });
               },
-              searchSymbols: () => {},
-              resolveSymbol: (symbolName: string, onSymbolResolvedCallback: any) => {
+              searchSymbols: (userInput: string, exchange: string, symbolType: string, onResult: (result: any[]) => void) => {
+                onResult([]);
+              },
+              resolveSymbol: (symbolName: string, onSymbolResolvedCallback: (symbol: any) => void, onResolveErrorCallback: (reason: string) => void) => {
                 onSymbolResolvedCallback({
                   name: symbolName,
                   full_name: symbolName,
@@ -422,9 +415,37 @@ const TradingViewWidget = ({ symbol, interval = '1D', onChartReady, isFullscreen
             widgetOptions.datafeed = {
               onReady: (callback: any) => {
                 console.log('Chart is ready');
-                callback({});
+                callback({
+                  supported_resolutions: ["1", "5", "15", "30", "60", "240", "D", "W", "M"]
+                });
                 onChartReady(widget);
-              }
+              },
+              searchSymbols: (userInput: string, exchange: string, symbolType: string, onResult: (result: any[]) => void) => {
+                onResult([]);
+              },
+              resolveSymbol: (symbolName: string, onSymbolResolvedCallback: (symbol: any) => void, onResolveErrorCallback: (reason: string) => void) => {
+                onSymbolResolvedCallback({
+                  name: symbolName,
+                  full_name: symbolName,
+                  description: symbolName,
+                  type: "crypto",
+                  session: "24x7",
+                  timezone: "Etc/UTC",
+                  minmov: 1,
+                  pricescale: 100000000,
+                  has_intraday: true,
+                  has_daily: true,
+                  has_weekly_and_monthly: true,
+                  supported_resolutions: ["1", "5", "15", "30", "60", "240", "D", "W", "M"],
+                  volume_precision: 8,
+                  data_status: "streaming",
+                });
+              },
+              getBars: (symbolInfo: any, resolution: string, periodParams: any, onHistoryCallback: any, onErrorCallback: any) => {
+                onHistoryCallback([], { noData: true });
+              },
+              subscribeBars: () => {},
+              unsubscribeBars: () => {}
             };
           }
 

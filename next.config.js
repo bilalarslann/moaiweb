@@ -1,19 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverActions: true,
-  },
   images: {
-    unoptimized: true,
+    domains: [
+      'assets.coingecko.com',
+      'static.coingecko.com',
+      'www.coingecko.com'
+    ],
   },
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      config.externals.push({
-        'puppeteer-core': 'puppeteer-core',
-        '@sparticuz/chromium': '@sparticuz/chromium'
-      });
-    }
-    return config;
+  experimental: {
+    // Server Actions are enabled by default in Next.js 14
+    // serverActions: true
   }
 }
 
