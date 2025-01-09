@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import OpenAI from 'openai';
 import ReactMarkdown from 'react-markdown';
+import { debounce } from 'lodash';
 
 type Message = {
   type: 'user' | 'bot';
@@ -13,6 +14,49 @@ type Message = {
     interval?: string;
   };
 };
+
+interface CoinAlternative {
+  symbol: string;
+  exchange: string;
+}
+
+interface SearchResult {
+  symbol: string;
+  description: string;
+  image: string;
+  market_cap_rank: number;
+  type: "crypto";
+  id: string;
+  price_usd: number;
+  price_change_24h: number | null;
+  volume_24h: number | null;
+}
+
+interface SearchResultWithNullablePrice extends Omit<SearchResult, 'price_usd'> {
+  price_usd: number | null;
+}
+
+// Type guard function
+function isValidSearchResult(result: SearchResultWithNullablePrice | null): result is SearchResult {
+  return result !== null && typeof result.price_usd === 'number';
+}
+
+interface CoinGeckoPriceData {
+  [key: string]: {
+    usd: number;
+    usd_24h_change?: number;
+    usd_24h_vol?: number;
+  };
+}
+
+interface CoinGeckoSearchResult {
+  id: string;
+  symbol: string;
+  name: string;
+  market_cap_rank: number;
+  thumb: string;
+  large: string;
+}
 
 const openai = new OpenAI({
   apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
@@ -39,16 +83,26 @@ const searchTradingViewSymbol = async (query: string): Promise<string> => {
     const data = await response.json();
 
     if (data && data.length > 0) {
-      // En iyi eşleşmeyi bul
-      const bestMatch = data.find((item: any) => 
+      // Kripto para eşleşmelerini filtrele
+      const cryptoMatches = data.filter((item: any) => 
         item.type === "crypto" && 
         (item.symbol.toLowerCase().includes(query.toLowerCase()) ||
          item.description.toLowerCase().includes(query.toLowerCase()))
       );
 
-      if (bestMatch) {
-        // Sembolü önbelleğe al
+      if (cryptoMatches.length > 0) {
+        // İşlem hacmine göre sırala (eğer varsa)
+        cryptoMatches.sort((a: any, b: any) => {
+          const volumeA = a.volume || 0;
+          const volumeB = b.volume || 0;
+          return volumeB - volumeA;
+        });
+
+        // En iyi eşleşmeyi seç
+        const bestMatch = cryptoMatches[0];
         const symbol = bestMatch.symbol;
+        
+        // Sembolü önbelleğe al
         symbolCache.set(cacheKey, symbol);
         lastCacheTime = now;
         console.log(`Found TradingView symbol for "${query}":`, symbol);
@@ -68,160 +122,58 @@ const searchTradingViewSymbol = async (query: string): Promise<string> => {
 // Coin sembolünü doğru exchange ile birleştiren yardımcı fonksiyon
 const getFormattedSymbol = async (symbol: string): Promise<string> => {
   try {
-    // TradingView'den doğru sembolü al
-    const tradingViewSymbol = await searchTradingViewSymbol(symbol);
+    // Önce varsayılan formatı hazırla
+    const defaultSymbol = `${symbol.toUpperCase()}USDT`;
+
+    // TradingView'den doğru sembolü al (proxy üzerinden)
+    const response = await fetch(`/api/crypto?url=${encodeURIComponent(`https://symbol-search.tradingview.com/symbol_search/?text=${encodeURIComponent(symbol)}&type=crypto`)}`);
     
-    // Eğer sembol zaten exchange içeriyorsa (örn: BINANCE:BTCUSDT) direkt döndür
-    if (tradingViewSymbol.includes(':')) {
-      return tradingViewSymbol;
+    if (!response.ok) {
+      return defaultSymbol;
     }
 
-    // Sembolü temizle
-    const cleanSymbol = tradingViewSymbol.replace(/[^A-Z0-9]/g, '');
-
-    // Tüm borsaları ve işlem hacimlerini kontrol et
-    const exchanges: { symbol: string; volume: number }[] = [];
-
-    // Binance'da kontrol et
     try {
-      const binanceResponse = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${cleanSymbol}USDT`);
-      if (binanceResponse.ok) {
-        const data = await binanceResponse.json();
-        if (data.volume) {
-          exchanges.push({
-            symbol: `BINANCE:${cleanSymbol}USDT`,
-            volume: parseFloat(data.volume) * parseFloat(data.lastPrice)
+      const data = await response.json();
+
+      if (data && data.length > 0) {
+        // Kripto para eşleşmelerini filtrele
+        const cryptoMatches = data.filter((item: any) => 
+          item.type === "crypto" && 
+          (item.symbol.toLowerCase().includes(symbol.toLowerCase()) ||
+           item.description.toLowerCase().includes(symbol.toLowerCase()))
+        );
+
+        if (cryptoMatches.length > 0) {
+          // İşlem hacmine göre sırala (eğer varsa)
+          cryptoMatches.sort((a: any, b: any) => {
+            const volumeA = a.volume || 0;
+            const volumeB = b.volume || 0;
+            return volumeB - volumeA;
           });
+
+          // En iyi eşleşmeyi seç
+          const bestMatch = cryptoMatches[0];
+          
+          // Eğer exchange_listed varsa ve BINANCE, KUCOIN, MEXC, GATE, OKX, HUOBI, BITGET veya GEMINI ise, kullan
+          if (bestMatch.exchange_listed) {
+            const exchange = bestMatch.exchange_listed.toUpperCase();
+            const pair = bestMatch.symbol.split(':')[1] || bestMatch.symbol;
+            return `${exchange}:${pair}`;
+          }
+          
+          // Yoksa sembolü direkt kullan
+          return bestMatch.symbol;
         }
       }
     } catch (e) {
-      console.error('Binance API error:', e);
+      // JSON parse hatası durumunda varsayılan sembolü kullan
+      return defaultSymbol;
     }
 
-    // KuCoin'de kontrol et
-    try {
-      const kucoinResponse = await fetch(`https://api.kucoin.com/api/v1/market/stats?symbol=${cleanSymbol}-USDT`);
-      if (kucoinResponse.ok) {
-        const data = await kucoinResponse.json();
-        if (data.data?.volValue) {
-          exchanges.push({
-            symbol: `KUCOIN:${cleanSymbol}USDT`,
-            volume: parseFloat(data.data.volValue)
-          });
-        }
-      }
-    } catch (e) {
-      console.error('KuCoin API error:', e);
-    }
-
-    // MEXC'de kontrol et
-    try {
-      const mexcResponse = await fetch(`https://api.mexc.com/api/v3/ticker/24hr?symbol=${cleanSymbol}USDT`);
-      if (mexcResponse.ok) {
-        const data = await mexcResponse.json();
-        if (data.volume) {
-          exchanges.push({
-            symbol: `MEXC:${cleanSymbol}USDT`,
-            volume: parseFloat(data.volume) * parseFloat(data.lastPrice)
-          });
-        }
-      }
-    } catch (e) {
-      console.error('MEXC API error:', e);
-    }
-
-    // Gate.io'da kontrol et
-    try {
-      const gateResponse = await fetch(`https://api.gateio.ws/api/v4/spot/tickers?currency_pair=${cleanSymbol}_USDT`);
-      if (gateResponse.ok) {
-        const data = await gateResponse.json();
-        if (data[0]?.quote_volume) {
-          exchanges.push({
-            symbol: `GATE:${cleanSymbol}USDT`,
-            volume: parseFloat(data[0].quote_volume)
-          });
-        }
-      }
-    } catch (e) {
-      console.error('Gate.io API error:', e);
-    }
-
-    // OKX'de kontrol et
-    try {
-      const okxResponse = await fetch(`https://www.okx.com/api/v5/market/ticker?instId=${cleanSymbol}-USDT`);
-      if (okxResponse.ok) {
-        const data = await okxResponse.json();
-        if (data.data?.[0]?.volCcy24h) {
-          exchanges.push({
-            symbol: `OKX:${cleanSymbol}USDT`,
-            volume: parseFloat(data.data[0].volCcy24h)
-          });
-        }
-      }
-    } catch (e) {
-      console.error('OKX API error:', e);
-    }
-
-    // Huobi'de kontrol et
-    try {
-      const huobiResponse = await fetch(`https://api.huobi.pro/market/detail?symbol=${cleanSymbol.toLowerCase()}usdt`);
-      if (huobiResponse.ok) {
-        const data = await huobiResponse.json();
-        if (data.tick?.vol) {
-          exchanges.push({
-            symbol: `HUOBI:${cleanSymbol}USDT`,
-            volume: parseFloat(data.tick.vol)
-          });
-        }
-      }
-    } catch (e) {
-      console.error('Huobi API error:', e);
-    }
-
-    // Bitget'de kontrol et
-    try {
-      const bitgetResponse = await fetch(`https://api.bitget.com/api/spot/v1/market/ticker?symbol=${cleanSymbol}USDT`);
-      if (bitgetResponse.ok) {
-        const data = await bitgetResponse.json();
-        if (data.data?.usdtVol) {
-          exchanges.push({
-            symbol: `BITGET:${cleanSymbol}USDT`,
-            volume: parseFloat(data.data.usdtVol)
-          });
-        }
-      }
-    } catch (e) {
-      console.error('Bitget API error:', e);
-    }
-
-    // Gemini'de kontrol et (USD çiftleri için)
-    try {
-      const geminiResponse = await fetch(`https://api.gemini.com/v1/pubticker/${cleanSymbol}usd`);
-      if (geminiResponse.ok) {
-        const data = await geminiResponse.json();
-        if (data.volume?.USD) {
-          exchanges.push({
-            symbol: `GEMINI:${cleanSymbol}USD`,
-            volume: parseFloat(data.volume.USD)
-          });
-        }
-      }
-    } catch (e) {
-      console.error('Gemini API error:', e);
-    }
-
-    // En yüksek hacimli borsayı seç
-    if (exchanges.length > 0) {
-      exchanges.sort((a, b) => b.volume - a.volume);
-      console.log(`Found ${cleanSymbol} in exchanges:`, exchanges.map(e => `${e.symbol} (vol: ${e.volume})`));
-      return exchanges[0].symbol;
-    }
-
-    // Hiçbir borsada bulunamazsa, USDT eklenmiş sembolü döndür
-    return `${cleanSymbol}USDT`;
+    // Eşleşme bulunamazsa varsayılan sembolü döndür
+    return defaultSymbol;
   } catch (error) {
-    console.error('Error checking exchanges:', error);
-    // Hata durumunda USDT eklenmiş sembolü döndür
+    // Hata durumunda varsayılan sembolü döndür
     return `${symbol.toUpperCase()}USDT`;
   }
 };
@@ -233,6 +185,46 @@ declare global {
       widget: new (config: any) => any;
     };
   }
+}
+
+interface TradingViewConfig {
+  width: string;
+  height: number;
+  symbol: string;
+  interval: string;
+  timezone: string;
+  theme: string;
+  style: string;
+  locale: string;
+  toolbar_bg: string;
+  enable_publishing: boolean;
+  hide_side_toolbar: boolean;
+  allow_symbol_change: boolean;
+  hide_top_toolbar: boolean;
+  save_image: boolean;
+  container_id: string;
+  library_path: string;
+  auto_save_delay: number;
+  debug: boolean;
+  disabled_features: string[];
+  enabled_features: string[];
+  studies: string[];
+  studies_overrides: Record<string, any>;
+  drawings_access: {
+    type: string;
+    tools: { name: string; grayed: boolean; }[];
+  };
+  overrides: Record<string, any>;
+  loading_screen: { backgroundColor: string };
+  time_frames: { text: string; resolution: string; description: string; }[];
+  datafeed?: {
+    onReady: (callback: (config: any) => void) => void;
+    searchSymbols: (userInput: string, exchange: string, symbolType: string, onResult: (result: any[]) => void) => void;
+    resolveSymbol: (symbolName: string, onSymbolResolvedCallback: (symbol: any) => void, onResolveErrorCallback: (reason: string) => void) => void;
+    getBars: (symbolInfo: any, resolution: string, from: number, to: number, onHistoryCallback: (bars: any[], meta: { noData: boolean }) => void, onErrorCallback: (reason: string) => void, firstDataRequest: boolean) => void;
+    subscribeBars: (symbolInfo: any, resolution: string, onRealtimeCallback: (bar: any) => void, subscriberUID: string, onResetCacheNeededCallback: () => void) => void;
+    unsubscribeBars: (subscriberUID: string) => void;
+  };
 }
 
 interface ChartData {
@@ -274,7 +266,6 @@ const TradingViewWidget = ({ symbol, interval = '1D', onChartReady, isFullscreen
   isFullscreen?: boolean 
 }) => {
   const widgetRef = useRef<any>(null);
-  // Generate a unique ID for each widget instance
   const containerId = useRef(`tradingview_${symbol}_${Math.random().toString(36).substring(7)}`);
 
   useEffect(() => {
@@ -288,7 +279,7 @@ const TradingViewWidget = ({ symbol, interval = '1D', onChartReady, isFullscreen
     script.onload = () => {
       if (typeof window.TradingView !== 'undefined') {
         try {
-          widget = new window.TradingView.widget({
+          const widgetOptions: TradingViewConfig = {
             width: "100%",
             height: isFullscreen ? window.innerHeight : 400,
             symbol: symbol,
@@ -358,18 +349,9 @@ const TradingViewWidget = ({ symbol, interval = '1D', onChartReady, isFullscreen
             drawings_access: { 
               type: "all",
               tools: [
-                {
-                  name: "Support",
-                  grayed: false
-                },
-                {
-                  name: "Resistance",
-                  grayed: false
-                },
-                {
-                  name: "TrendLine",
-                  grayed: false
-                }
+                { name: "Support", grayed: false },
+                { name: "Resistance", grayed: false },
+                { name: "TrendLine", grayed: false }
               ]
             },
             overrides: {
@@ -392,17 +374,62 @@ const TradingViewWidget = ({ symbol, interval = '1D', onChartReady, isFullscreen
               { text: "30m", resolution: "30", description: "30 Minutes" },
               { text: "15m", resolution: "15", description: "15 Minutes" },
               { text: "5m", resolution: "5", description: "5 Minutes" }
-            ]
-          });
-
-          widgetRef.current = widget;
-
-          widget.onChartReady(() => {
-            console.log('Chart is ready');
-            if (onChartReady) {
-              onChartReady(widget);
+            ],
+            // Temel sembol bilgilerini sağla
+            datafeed: {
+              onReady: (callback: any) => {
+                callback({
+                  supported_resolutions: ["1", "5", "15", "30", "60", "240", "D", "W", "M"],
+                  supports_marks: false,
+                  supports_timescale_marks: false,
+                  supports_time: true,
+                  exchanges: [
+                    { value: "", name: "All Exchanges", desc: "" },
+                    { value: "BINANCE", name: "Binance", desc: "Binance" },
+                    { value: "KUCOIN", name: "KuCoin", desc: "KuCoin" }
+                  ],
+                  symbols_types: [{ name: "crypto", value: "crypto" }]
+                });
+              },
+              searchSymbols: () => {},
+              resolveSymbol: (symbolName: string, onSymbolResolvedCallback: any) => {
+                onSymbolResolvedCallback({
+                  name: symbolName,
+                  full_name: symbolName,
+                  description: symbolName,
+                  type: "crypto",
+                  session: "24x7",
+                  timezone: "Etc/UTC",
+                  minmov: 1,
+                  pricescale: 100000000,
+                  has_intraday: true,
+                  has_daily: true,
+                  has_weekly_and_monthly: true,
+                  supported_resolutions: ["1", "5", "15", "30", "60", "240", "D", "W", "M"],
+                  volume_precision: 8,
+                  data_status: "streaming",
+                });
+              },
+              getBars: (symbolInfo: any, resolution: string, periodParams: any, onHistoryCallback: any, onErrorCallback: any) => {
+                onHistoryCallback([], { noData: true });
+              },
+              subscribeBars: () => {},
+              unsubscribeBars: () => {}
             }
-          });
+          };
+
+          if (onChartReady) {
+            widgetOptions.datafeed = {
+              onReady: (callback: any) => {
+                console.log('Chart is ready');
+                callback({});
+                onChartReady(widget);
+              }
+            };
+          }
+
+          widget = new window.TradingView.widget(widgetOptions);
+          widgetRef.current = widget;
         } catch (error) {
           console.error('Widget initialization error:', error);
         }
@@ -445,74 +472,124 @@ const getChartData = async (symbol: string): Promise<ChartData | null> => {
       resistances: []
     };
 
-    // Get current price and 24h stats
-    const [priceResponse, klinesResponse] = await Promise.all([
-      fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}USDT`),
-      fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=1d&limit=30`)
-    ]);
+    // Sembolü temizle (BINANCE:BTCUSDT -> BTC)
+    const cleanSymbol = symbol.split(':').pop()?.replace(/USDT$/, '') || symbol;
 
-    const priceData = await priceResponse.json();
-    const klinesData = await klinesResponse.json();
-
-    // Set current price
-    chartData.price = parseFloat(priceData.price);
-
-    // Calculate indicators from klines data
-    if (klinesData && klinesData.length > 0) {
-      const closes = klinesData.map((k: any) => parseFloat(k[4]));
-      
-      // Calculate SMA (20 periods)
-      const sma = closes.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20;
-      chartData.sma = sma;
-
-      // Calculate RSI (14 periods)
-      const gains = [];
-      const losses = [];
-      for (let i = 1; i < closes.length; i++) {
-        const diff = closes[i] - closes[i - 1];
-        if (diff >= 0) {
-          gains.push(diff);
-          losses.push(0);
-        } else {
-          gains.push(0);
-          losses.push(Math.abs(diff));
-        }
+    // Try to get data from multiple exchanges
+    const exchanges = [
+      {
+        name: 'Binance',
+        priceUrl: `https://api.binance.com/api/v3/ticker/price?symbol=${cleanSymbol}USDT`,
+        klinesUrl: `https://api.binance.com/api/v3/klines?symbol=${cleanSymbol}USDT&interval=1d&limit=30`,
+        parsePrice: (data: any) => parseFloat(data.price),
+        parseKlines: (data: any) => data.map((k: any) => parseFloat(k[4]))
+      },
+      {
+        name: 'KuCoin',
+        priceUrl: `https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=${cleanSymbol}-USDT`,
+        klinesUrl: `https://api.kucoin.com/api/v1/market/candles?symbol=${cleanSymbol}-USDT&type=1day&limit=30`,
+        parsePrice: (data: any) => parseFloat(data.data.price),
+        parseKlines: (data: any) => data.data.reverse().map((k: any) => parseFloat(k[2]))
       }
-      const avgGain = gains.slice(-14).reduce((a, b) => a + b, 0) / 14;
-      const avgLoss = losses.slice(-14).reduce((a, b) => a + b, 0) / 14;
-      const rs = avgGain / avgLoss;
-      chartData.rsi = 100 - (100 / (1 + rs));
+    ];
 
-      // Calculate Bollinger Bands (20 periods, 2 standard deviations)
-      const last20Closes = closes.slice(-20);
-      const bbSMA = last20Closes.reduce((a: number, b: number) => a + b, 0) / 20;
-      const squaredDiffs = last20Closes.map((close: number) => Math.pow(close - bbSMA, 2));
-      const stdDev = Math.sqrt(squaredDiffs.reduce((a: number, b: number) => a + b, 0) / 20);
-      
-      chartData.bb.middle = bbSMA;
-      chartData.bb.upper = bbSMA + (2 * stdDev);
-      chartData.bb.lower = bbSMA - (2 * stdDev);
+    // Try each exchange until we get valid data
+    for (const exchange of exchanges) {
+      try {
+        // Her borsa için tek tek dene
+        const priceResponse = await fetch(`/api/crypto?url=${encodeURIComponent(exchange.priceUrl)}`);
+        if (!priceResponse.ok) continue;
 
-      // Calculate support and resistance levels
-      const sortedPrices = [...closes].sort((a, b) => a - b);
-      const currentPrice = chartData.price || 0;
-      
-      // Find closest support levels below current price
-      chartData.supports = sortedPrices
-        .filter(price => price < currentPrice)
-        .slice(-3)
-        .reverse();
+        let priceData;
+        try {
+          priceData = await priceResponse.json();
+        } catch (e) {
+          continue;
+        }
 
-      // Find closest resistance levels above current price
-      chartData.resistances = sortedPrices
-        .filter(price => price > currentPrice)
-        .slice(0, 3);
+        // Set current price
+        try {
+          const price = exchange.parsePrice(priceData);
+          if (!price || isNaN(price)) continue;
+          chartData.price = price;
+
+          // Fiyat başarılı ise şimdi klines verisini al
+          const klinesResponse = await fetch(`/api/crypto?url=${encodeURIComponent(exchange.klinesUrl)}`);
+          if (!klinesResponse.ok) continue;
+
+          let klinesData;
+          try {
+            klinesData = await klinesResponse.json();
+          } catch (e) {
+            continue;
+          }
+
+          // Get klines data
+          try {
+            const closes = exchange.parseKlines(klinesData);
+            if (!closes || closes.length < 20 || closes.some(isNaN)) continue;
+
+            // Calculate SMA (20 periods)
+            const sma = closes.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20;
+            chartData.sma = sma;
+
+            // Calculate RSI (14 periods)
+            const gains = [];
+            const losses = [];
+            for (let i = 1; i < closes.length; i++) {
+              const diff = closes[i] - closes[i - 1];
+              if (diff >= 0) {
+                gains.push(diff);
+                losses.push(0);
+              } else {
+                gains.push(0);
+                losses.push(Math.abs(diff));
+              }
+            }
+            const avgGain = gains.slice(-14).reduce((a, b) => a + b, 0) / 14;
+            const avgLoss = losses.slice(-14).reduce((a, b) => a + b, 0) / 14;
+            const rs = avgGain / avgLoss;
+            chartData.rsi = 100 - (100 / (1 + rs));
+
+            // Calculate Bollinger Bands (20 periods, 2 standard deviations)
+            const last20Closes = closes.slice(-20);
+            const bbSMA = last20Closes.reduce((a: number, b: number) => a + b, 0) / 20;
+            const squaredDiffs = last20Closes.map((close: number) => Math.pow(close - bbSMA, 2));
+            const stdDev = Math.sqrt(squaredDiffs.reduce((a: number, b: number) => a + b, 0) / 20);
+            
+            chartData.bb.middle = bbSMA;
+            chartData.bb.upper = bbSMA + (2 * stdDev);
+            chartData.bb.lower = bbSMA - (2 * stdDev);
+
+            // Calculate support and resistance levels
+            const sortedPrices = [...closes].sort((a, b) => a - b);
+            const currentPrice = chartData.price || 0;
+            
+            // Find closest support levels below current price
+            chartData.supports = sortedPrices
+              .filter(price => price < currentPrice)
+              .slice(-3)
+              .reverse();
+
+            // Find closest resistance levels above current price
+            chartData.resistances = sortedPrices
+              .filter(price => price > currentPrice)
+              .slice(0, 3);
+
+            return chartData;
+          } catch (e) {
+            continue;
+          }
+        } catch (e) {
+          continue;
+        }
+      } catch (error) {
+        continue;
+      }
     }
 
-    console.log('Retrieved Chart Data:', chartData);
-    return chartData;
+    return null;
   } catch (error) {
-    console.error('Error getting chart data:', error);
     return null;
   }
 };
@@ -530,6 +607,8 @@ export default function AnalistMoai() {
   const [chartWidget, setChartWidget] = useState<any>(null);
   const [fullscreenChart, setFullscreenChart] = useState<{symbol: string, interval?: string} | null>(null);
   const [userLanguage, setUserLanguage] = useState<'en' | 'tr'>('en');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
 
   const placeholders = {
     en: [
@@ -555,6 +634,188 @@ export default function AnalistMoai() {
 
     return () => clearInterval(interval);
   }, [userLanguage]);
+
+  // Debounced search function
+  const debouncedSearch = useCallback(
+    debounce(async (query: string) => {
+      if (query.length < 1) {
+        setSearchResults([]);
+        setShowSearchResults(false);
+        return;
+      }
+
+      try {
+        // CoinGecko API'sini kullan
+        const searchResponse = await fetch(`/api/crypto?url=${encodeURIComponent(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(query)}`)}`);
+        
+        if (!searchResponse.ok) {
+          throw new Error('Search API error');
+        }
+
+        const searchData = await searchResponse.json();
+        
+        // Sadece kripto paraları filtrele
+        const filteredCoins = (searchData.coins as CoinGeckoSearchResult[])
+          .filter(coin => coin.market_cap_rank && coin.id) // Sadece market cap'i ve ID'si olan coinleri al
+          .slice(0, 6); // İlk 6 sonucu al
+
+        if (filteredCoins.length === 0) {
+          setSearchResults([]);
+          setShowSearchResults(false);
+          return;
+        }
+
+        // Fiyat bilgilerini almak için tek bir API çağrısı yap
+        const validCoinIds = filteredCoins
+          .map(coin => coin.id)
+          .filter(id => id && typeof id === 'string' && id.length > 0);
+
+        if (validCoinIds.length === 0) {
+          setSearchResults([]);
+          setShowSearchResults(false);
+          return;
+        }
+
+        const priceUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${validCoinIds.join(',')}&vs_currency=usd&include_24hr_vol=true&include_24hr_change=true&precision=2`;
+        const priceResponse = await fetch(`/api/crypto?url=${encodeURIComponent(priceUrl)}`);
+        
+        let priceData: CoinGeckoPriceData = {};
+        if (priceResponse.ok) {
+          try {
+            const rawPriceData = await priceResponse.json();
+            // Validate price data
+            if (rawPriceData && typeof rawPriceData === 'object') {
+              priceData = Object.entries(rawPriceData).reduce((acc, [key, value]) => {
+                if (value && typeof value === 'object' && 'usd' in value) {
+                  acc[key] = value as { usd: number; usd_24h_change?: number; usd_24h_vol?: number };
+                }
+                return acc;
+              }, {} as CoinGeckoPriceData);
+            }
+          } catch (e) {
+            console.log('Price data parse error');
+          }
+        }
+
+        // Sonuçları formatla
+        const formattedResults = filteredCoins
+          .map(coin => {
+            const price = priceData[coin.id];
+            if (!price || typeof price.usd !== 'number') return null;
+
+            const result: SearchResultWithNullablePrice = {
+              symbol: coin.symbol.toUpperCase(),
+              description: coin.name,
+              image: coin.large || coin.thumb,
+              market_cap_rank: coin.market_cap_rank,
+              type: "crypto" as const,
+              id: coin.id,
+              price_usd: price.usd,
+              price_change_24h: typeof price.usd_24h_change === 'number' ? price.usd_24h_change : null,
+              volume_24h: typeof price.usd_24h_vol === 'number' ? price.usd_24h_vol : null
+            };
+
+            return result;
+          })
+          .filter(isValidSearchResult);
+
+        setSearchResults(formattedResults);
+        setShowSearchResults(formattedResults.length > 0);
+      } catch (error) {
+        // Hata durumunda sessizce devam et
+        setSearchResults([]);
+        setShowSearchResults(false);
+      }
+    }, 1000), // Debounce süresini 1 saniyeye çıkar
+    []
+  );
+
+  // Handle input change with minimum length check
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.trim().toLowerCase(); // Küçük harfe çevir
+    setInput(value);
+    
+    // En az 3 karakter yazıldığında aramaya başla
+    if (value.length >= 3) {
+      debouncedSearch(value);
+    } else {
+      setSearchResults([]);
+      setShowSearchResults(false);
+    }
+  };
+
+  // Handle search result click
+  const handleSearchResultClick = async (symbol: string) => {
+    setInput('');
+    setSearchResults([]);
+    setShowSearchResults(false);
+    setIsLoading(true);
+    
+    // Add user message with the selected symbol
+    setMessages(prev => [...prev, { 
+      type: 'user', 
+      content: userLanguage === 'tr' ? 
+        `${symbol} için analiz yapar mısın?` : 
+        `Can you analyze ${symbol}?` 
+    }]);
+
+    try {
+      // Get formatted symbol with correct exchange
+      const formattedSymbol = await getFormattedSymbol(symbol);
+      
+      // First, send just the chart
+      setMessages(prev => [...prev, {
+        type: 'bot',
+        content: '',
+        chart: {
+          symbol: formattedSymbol
+        }
+      }]);
+
+      // Get chart data and continue with analysis
+      const chartData = await getChartData(symbol);
+      if (!chartData) {
+        throw new Error('Could not get chart data');
+      }
+
+      // Generate analysis using OpenAI
+      const completion = await openai.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content: userLanguage === 'tr' ? 
+              `Sen ANALIST MOAI'sin, bir yapay zeka kripto analisti. Verilen coin için teknik analiz yap.` :
+              `You are ANALYST MOAI, an AI cryptocurrency analyst. Provide technical analysis for the given coin.`
+          },
+          {
+            role: "user",
+            content: userLanguage === 'tr' ? 
+              `${symbol} için detaylı teknik analiz yap.` :
+              `Provide a detailed technical analysis for ${symbol}.`
+          }
+        ],
+        model: "gpt-3.5-turbo",
+      });
+
+      const botResponse = completion.choices[0]?.message?.content || 
+        (userLanguage === 'tr' ? "Üzgünüm, analiz yaparken bir hata oluştu." : "Sorry, an error occurred during analysis.");
+
+      setMessages(prev => [...prev, {
+        type: 'bot',
+        content: botResponse
+      }]);
+    } catch (error) {
+      console.log('Analysis error:', error);
+      setMessages(prev => [...prev, {
+        type: 'bot',
+        content: userLanguage === 'tr' ?
+          'Üzgünüm, bir hata oluştu. Lütfen tekrar deneyin.' :
+          'Sorry, an error occurred. Please try again.'
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -866,6 +1127,50 @@ export default function AnalistMoai() {
     }
   };
 
+  // Search Results UI
+  const renderSearchResults = () => {
+    if (!showSearchResults || searchResults.length === 0) return null;
+
+    return (
+      <div className="absolute bottom-24 left-1/2 -translate-x-1/2 w-full max-w-4xl">
+        <div className="flex justify-center gap-2 flex-wrap">
+          {searchResults.map((result, index) => (
+            <button
+              key={index}
+              onClick={() => handleSearchResultClick(result.symbol)}
+              className="px-4 py-2 rounded-lg transition-all duration-200 border border-blue-500/50 text-blue-400 hover:text-blue-300 shadow-[0_0_10px_0] shadow-blue-500/20 bg-black/80 backdrop-blur-md hover:shadow-[0_0_15px_0] hover:shadow-blue-500/30 hover:border-blue-400/50 text-sm whitespace-nowrap"
+            >
+              <div className="flex items-center gap-1.5">
+                {/* Logo */}
+                <div className="relative flex-shrink-0">
+                  <Image 
+                    src={result.image} 
+                    alt={result.description}
+                    width={16}
+                    height={16}
+                    className="rounded-full"
+                    unoptimized
+                  />
+                </div>
+                
+                {/* Symbol and Price */}
+                <div className="flex items-center gap-1.5">
+                  <span className="font-medium">{result.symbol.toUpperCase()}</span>
+                  {result.price_usd && (
+                    <span className="text-gray-400">${result.price_usd.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    })}</span>
+                  )}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gradient-to-b from-gray-900 to-black">
       {/* Fullscreen Chart Overlay */}
@@ -943,7 +1248,7 @@ export default function AnalistMoai() {
                     className="absolute top-4 right-4 z-10 bg-gray-800/50 p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L15 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0l15-15m-15 0L15 9" />
                     </svg>
                   </button>
                   <TradingViewWidget 
@@ -969,23 +1274,37 @@ export default function AnalistMoai() {
         )}
       </div>
 
+      {/* Search Results */}
+      {renderSearchResults()}
+
       {/* Input Area */}
       <div className="border-t border-purple-900/30 bg-black/30 backdrop-blur-sm p-4">
-        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto flex gap-2">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={currentPlaceholder}
-            className="flex-1 bg-gray-800/50 text-white placeholder-gray-400 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500/50 border border-gray-700"
-          />
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="bg-purple-600 text-white px-6 py-3 rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-500/20 font-medium"
-          >
-            {isLoading ? 'Analyzing...' : 'Send'}
-          </button>
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          if (input.trim()) {
+            handleSubmit(e);
+          }
+        }} className="max-w-4xl mx-auto">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={handleInputChange}
+              onFocus={() => setShowSearchResults(true)}
+              onBlur={() => {
+                setTimeout(() => setShowSearchResults(false), 200);
+              }}
+              placeholder={currentPlaceholder}
+              className="flex-1 bg-gray-800/50 text-white placeholder-gray-400 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500/50 border border-gray-700"
+            />
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="bg-purple-600 text-white px-6 py-3 rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-500/20 font-medium"
+            >
+              {isLoading ? 'Analyzing...' : 'Send'}
+            </button>
+          </div>
         </form>
       </div>
     </div>
