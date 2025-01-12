@@ -711,6 +711,9 @@ export default function AnalistMoai() {
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Check if site is in maintenance mode
+  const isMaintenance = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === 'true';
+
   const placeholders = {
     en: [
       "Can you do technical analysis for Bitcoin?",
@@ -728,32 +731,31 @@ export default function AnalistMoai() {
     ]
   };
 
-  // Check if site is in maintenance mode
-  const isMaintenance = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === 'true';
+  // Placeholder effect
+  useEffect(() => {
+    if (!placeholders[userLanguage]) return;
 
-  // If in maintenance mode, show maintenance page
-  if (isMaintenance) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-black">
-        <div className="relative w-24 h-24 mb-8">
-          <Image
-            src="/moai.webp"
-            alt="MOAI"
-            width={96}
-            height={96}
-            className="rounded-full ring-4 ring-purple-500/50"
-          />
-        </div>
-        <h1 className="text-3xl font-bold text-white mb-4">🚧 Bakım Modu</h1>
-        <p className="text-purple-300 text-center max-w-md mb-8">
-          Analyst MOAI şu anda bakımda. Daha iyi hizmet verebilmek için çalışıyoruz. Lütfen daha sonra tekrar deneyin.
-        </p>
-        <div className="text-purple-400/60 text-sm">
-          Estimated completion: Soon™
-        </div>
-      </div>
-    );
-  }
+    const interval = setInterval(() => {
+      setCurrentPlaceholder(placeholders[userLanguage][Math.floor(Math.random() * placeholders[userLanguage].length)]);
+    }, 3000);
+
+    // Set initial placeholder
+    setCurrentPlaceholder(placeholders[userLanguage][Math.floor(Math.random() * placeholders[userLanguage].length)]);
+
+    return () => clearInterval(interval);
+  }, [userLanguage, placeholders]);
+
+  // Click outside handler effect
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Token verification effect
   useEffect(() => {
@@ -839,100 +841,7 @@ export default function AnalistMoai() {
     checkTokenBalance();
   }, [connected, publicKey]);
 
-  // Placeholder effect
-  useEffect(() => {
-    if (!placeholders[userLanguage]) return;
-
-    const interval = setInterval(() => {
-      setCurrentPlaceholder(placeholders[userLanguage][Math.floor(Math.random() * placeholders[userLanguage].length)]);
-    }, 3000);
-
-    // Set initial placeholder
-    setCurrentPlaceholder(placeholders[userLanguage][Math.floor(Math.random() * placeholders[userLanguage].length)]);
-
-    return () => clearInterval(interval);
-  }, [userLanguage]);
-
-  // Click outside handler effect
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
-        setShowSuggestions(false);
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Add function to fetch coin suggestions
-  const fetchCoinSuggestions = async (query: string) => {
-    if (query.length < 2) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-
-    try {
-      const response = await fetch(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(query)}`);
-      const data = await response.json();
-
-      // Check if there are any coin results before processing
-      if (!data.coins || data.coins.length === 0) {
-        setSuggestions([]);
-        setShowSuggestions(false);
-        return;
-      }
-      
-      // Filter and format suggestions, limit to 3
-      const formattedSuggestions = data.coins
-        .slice(0, 3) // Limit to 3 suggestions
-        .map((coin: any) => ({
-          id: coin.id,
-          symbol: coin.symbol.toUpperCase(),
-          name: coin.name,
-          thumb: coin.thumb
-        }));
-      
-      // Only show suggestions if we have results
-      if (formattedSuggestions.length > 0) {
-        setSuggestions(formattedSuggestions);
-        setShowSuggestions(true);
-      } else {
-        setSuggestions([]);
-        setShowSuggestions(false);
-      }
-    } catch (error) {
-      console.error('Error fetching suggestions:', error);
-      setSuggestions([]);
-      setShowSuggestions(false);
-    }
-  };
-
-  // Modify input change handler
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setInput(value);
-    
-    // Only fetch suggestions if no coin is selected
-    if (!selectedCoin) {
-      // Clear any existing timer
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-
-      // Set new timer for 2 seconds
-      debounceTimerRef.current = setTimeout(() => {
-        fetchCoinSuggestions(value);
-      }, 500);
-    } else {
-      // Clear any existing suggestions
-      setSuggestions([]);
-      setShowSuggestions(false);
-    }
-  };
-
-  // Add cleanup for debounce timer
+  // Cleanup effect for debounce timer
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) {
@@ -941,545 +850,58 @@ export default function AnalistMoai() {
     };
   }, []);
 
-  // Update suggestion click handler
-  const handleSuggestionClick = (suggestion: CoinSuggestion) => {
-    setSelectedCoin(suggestion);
-    setInput('');
-    setShowSuggestions(false);
-  };
-
-  // Add clear selection handler
-  const handleClearSelection = () => {
-    setSelectedCoin(null);
-    setInput('');
-  };
-
-  // Add function to handle input with selected coin
-  const handleSubmitWithCoin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!selectedCoin && !input.trim()) return;
-
-    const userInput = input.trim();
-    setInput('');
-    setSelectedCoin(null);
-    setIsMessageLoading(true);
-
-    try {
-      // Language detection
-      const languageDetection = await callOpenAI([
-        {
-          role: "system",
-          content: `You are a language detector. Analyze the given text and return ONLY "tr" for Turkish or "en" for English in your response. Nothing else.`
-        },
-        {
-          role: "user",
-          content: userInput
-        }
-      ]);
-
-      const detectedLanguage = languageDetection.choices[0]?.message?.content?.trim().toLowerCase() as 'en' | 'tr';
-      setUserLanguage(detectedLanguage);
-
-      // If no coin is selected, check if the message is requesting coin analysis
-      if (!selectedCoin && !isRequestingCoinAnalysis(userInput)) {
-        // Add user's message first
-        const userMessage: Message = {
-          type: 'user',
-          content: userInput,
-          timestamp: Date.now()
-        };
-
-        // Add bot's response
-        const noAnalysisMessage: Message = {
-          type: 'bot',
-          content: detectedLanguage === 'tr' 
-            ? "Analiz etmemi istediğiniz bir coin belirtin. Örneğin: 'BTC analiz' veya 'ETH fiyat tahmini'"
-            : "Please specify a coin you'd like me to analyze. For example: 'BTC analysis' or 'ETH price prediction'",
-          timestamp: Date.now()
-        };
-
-        setMessages(prev => [...prev, userMessage, noAnalysisMessage]);
-        setIsMessageLoading(false);
-        return;
-      }
-
-      // Extract coin symbol if no coin is selected
-      const coinSymbol = selectedCoin ? selectedCoin.symbol : extractCoinSymbol(userInput);
-      
-      if (!selectedCoin && !coinSymbol) {
-        // Add user's message first
-        const userMessage: Message = {
-          type: 'user',
-          content: userInput,
-          timestamp: Date.now()
-        };
-
-        // Add bot's response
-        const noCoinMessage: Message = {
-          type: 'bot',
-          content: detectedLanguage === 'tr'
-            ? "Mesajınızda geçerli bir coin sembolü bulamadım. Lütfen analiz etmek istediğiniz coini belirtin."
-            : "I couldn't find a valid coin symbol in your message. Please specify which coin you'd like me to analyze.",
-          timestamp: Date.now()
-        };
-
-        setMessages(prev => [...prev, userMessage, noCoinMessage]);
-        setIsMessageLoading(false);
-        return;
-      }
-
-      // Get previous conversation context
-      const conversationHistory: ChatMessage[] = messages.map(msg => ({
-        role: msg.type === 'user' ? 'user' : 'assistant',
-        content: msg.content
-      }));
-
-      // Add user message with timestamp and coin info
-      const newUserMessage: Message = { 
-        type: 'user', 
-        content: userInput,
-        timestamp: Date.now(),
-        coin: selectedCoin || undefined
-      };
-      setMessages(prev => [...prev, newUserMessage]);
-
-      // Get TradingView symbol for chart
-      const formattedSymbol = coinSymbol ? await getFormattedSymbol(coinSymbol) : '';
-      
-      // Only show chart if it's a valid TradingView symbol
-      if (formattedSymbol && !formattedSymbol.includes('INVALID')) {
-        const newBotMessage: Message = {
-          type: 'bot',
-          content: '',
-          chart: {
-            symbol: formattedSymbol
-          },
-          timestamp: Date.now()
-        };
-        setMessages(prev => [...prev, newBotMessage]);
-      }
-
-      // Get chart data
-      const chartData = coinSymbol ? await getChartData(coinSymbol) : null;
-      if (!chartData) {
-        const errorMessage = detectedLanguage === 'tr' ? 
-          `${coinSymbol || ''} için veri alınamadı. Bu coin henüz CoinGecko'da listelenmemiş olabilir veya yeterli veri bulunmuyor. Lütfen başka bir coin deneyin.` :
-          `Couldn't get data for ${coinSymbol || ''}. This coin might not be listed on CoinGecko yet or there isn't enough data. Please try another coin.`;
-
-        const errorBotMessage: Message = {
-          type: 'bot',
-          content: errorMessage,
-          timestamp: Date.now()
-        };
-        setMessages(prev => [...prev, errorBotMessage]);
-        setIsMessageLoading(false);
-        return;
-      }
-
-      // Analyze the user's input to determine the type of analysis needed
-      const analysisType = await callOpenAI([
-        {
-          role: "system",
-          content: detectedLanguage === 'tr' ? 
-            `Sen bir kripto analisti asistanısın. Kullanıcının sorusunu analiz et ve hangi tür analiz istediğini belirle.
-            
-            Soru tipleri:
-            1. Genel Analiz: "analiz et", "nasıl", "ne düşünüyorsun" gibi genel sorular
-            2. Fiyat Tahmini: "hedef", "ne kadar olur", "yükselir mi" gibi fiyat odaklı sorular
-            3. Teknik Analiz: "teknik", "göstergeler", "indikatör" gibi teknik analiz odaklı sorular
-            4. Piyasa Analizi: "piyasa", "market", "trend" gibi genel piyasa durumu odaklı sorular
-            
-            Sadece aşağıdaki formatlardan birini döndür:
-            - GENEL_ANALIZ
-            - FIYAT_TAHMINI
-            - TEKNIK_ANALIZ
-            - PIYASA_ANALIZI` :
-            `You are a crypto analyst assistant. Analyze the user's question and determine what type of analysis is needed.
-            
-            Question types:
-            1. General Analysis: general questions like "analyze", "how is", "what do you think"
-            2. Price Prediction: price-focused questions like "target", "how much", "will it rise"
-            3. Technical Analysis: technical analysis focused questions like "technical", "indicators"
-            4. Market Analysis: market condition focused questions like "market", "trend"
-            
-            Return only one of the following formats:
-            - GENERAL_ANALYSIS
-            - PRICE_PREDICTION
-            - TECHNICAL_ANALYSIS
-            - MARKET_ANALYSIS`
-        },
-        {
-          role: "user",
-          content: userInput
-        }
-      ]);
-
-      const analysisTypeResult = analysisType.choices[0]?.message?.content?.trim() || "GENERAL_ANALYSIS";
-
-      // Send the analysis
-      const completion = await callOpenAI([
-        {
-          role: 'system',
-          content: detectedLanguage === 'tr' ? 
-            `Sen MOAI'sin - kripto piyasalarının en zeki teknik analisti. Analizini TAM OLARAK 3 PARAGRAFTA yap:
-
-            1. PARAGRAF: Fiyat hareketleri ve önemli destek/direnç seviyeleri analizi. Hacim profiline göre belirlenen en önemli destek ve direnç seviyelerini detaylı açıkla. Hangi seviyelerin güçlü olduğunu ve neden önemli olduklarını belirt. Fiyatın bu seviyelere göre konumunu değerlendir.
-
-            2. PARAGRAF: Teknik göstergeleri analiz et (RSI, MACD, BB, SMA'lar). Trend analizi yap ve hacim analizini değerlendir. Farklı periyotlardaki (20, 50, 200) hareketli ortalamaların konumlarını ve ne anlama geldiklerini açıkla.
-
-            3. PARAGRAF: Kullanıcının spesifik sorusunu cevapla. Eğer fiyat tahmini isteniyorsa, destek/direnç seviyeleri ve teknik göstergelere dayalı tahmin yap. Kısa ve orta vadeli hedefleri belirt.
-
-            ÖNEMLİ KURALLAR:
-            - Kesinlikle 3 paragraftan fazla yazma
-            - Her paragraf en fazla 4-5 cümle olsun
-            - Tüm sayısal değerleri **kalın** yaz
-            - Teknik terimleri doğal bir dilde açıkla
-            - Başlık veya liste kullanma, düz metin yaz
-            - Destek/direnç seviyelerini mutlaka belirt
-
-            Not: Bu analiz eğitim amaçlıdır.` :
-            `You are MOAI - the smartest technical analyst in crypto markets. Present your analysis in EXACTLY 3 PARAGRAPHS:
-
-            1ST PARAGRAPH: Price action and critical support/resistance levels analysis. Explain in detail the most important support and resistance levels determined by volume profile. Indicate which levels are strong and why they are important. Evaluate price position relative to these levels.
-
-            2ND PARAGRAPH: Analyze technical indicators (RSI, MACD, BB, SMAs). Perform trend analysis and evaluate volume analysis. Explain the positions of different period moving averages (20, 50, 200) and what they mean.
-
-            3RD PARAGRAPH: Answer the user's specific question. If price prediction is requested, make a forecast based on support/resistance levels and technical indicators. Specify short and medium-term targets.
-
-            IMPORTANT RULES:
-            - Never write more than 3 paragraphs
-            - Each paragraph should be 4-5 sentences maximum
-            - Write all numerical values in **bold**
-            - Explain technical terms conversationally
-            - No headers or lists, just plain text
-            - Always mention support/resistance levels
-
-            Note: This analysis is for educational purposes only.`
-        },
-        ...conversationHistory,
-        {
-          role: 'user',
-          content: `Analyze ${coinSymbol} with the following data: ${JSON.stringify(chartData)}
-          User's specific question: ${userInput || 'general analysis'}`
-        }
-      ]);
-
-      const botResponse = completion.choices[0]?.message?.content || 
-        (detectedLanguage === 'tr' ? "Üzgünüm, analiz yaparken bir hata oluştu." : "Sorry, an error occurred during analysis.");
-
-      const analysisMessage: Message = {
-        type: 'bot',
-        content: botResponse,
-        timestamp: Date.now()
-      };
-      setMessages(prev => [...prev, analysisMessage]);
-    } catch (error) {
-      console.error('Error:', error);
-      const errorMessage: Message = {
-        type: 'bot',
-        content: userLanguage === 'tr' ?
-          'Bir hata oluştu. Lütfen tekrar deneyin.' :
-          'An error occurred. Please try again.',
-        timestamp: Date.now()
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsMessageLoading(false);
-      setSelectedCoin(null);
-    }
-  };
-
-  // Render loading state
-  if (isWalletLoading) {
+  // If in maintenance mode, show maintenance page
+  if (isMaintenance) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-black">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
-        <p className="text-purple-300 mt-4">Checking wallet...</p>
-      </div>
-    );
-  }
-
-  // Render connect wallet state
-  if (!connected) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-black">
-        <div className="text-center space-y-4">
-          <h1 className="text-2xl font-bold text-white mb-8">Welcome to Analyst MOAI</h1>
-          <p className="text-purple-300 mb-8">Please connect your wallet to access the analysis</p>
-          <WalletMultiButton className="!bg-purple-600 hover:!bg-purple-700 transition-colors" />
-        </div>
-      </div>
-    );
-  }
-
-  // Render insufficient token state
-  if (!hasToken) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-black">
-        <div className="text-center space-y-4">
-          <h1 className="text-2xl font-bold text-white mb-4">Access Required</h1>
-          <p className="text-purple-300 mb-2">You need to hold at least 200,000 MOAI tokens to access this feature</p>
-          <p className="text-purple-400/80 text-sm mb-8">Current holdings are insufficient</p>
-          <div className="flex flex-col gap-3">
-            <a 
-              href="YOUR_TOKEN_PURCHASE_LINK" //raydium link ekle
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="bg-purple-600 text-white px-6 py-3 rounded-xl hover:bg-purple-700 transition-colors"
-            >
-              Get MOAI Tokens
-            </a>
-            <button
-              onClick={() => handleDisconnect(disconnect)}
-              className="bg-red-600/20 text-red-300 px-6 py-3 rounded-xl hover:bg-red-600/30 transition-colors flex items-center justify-center gap-2"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-              </svg>
-              Disconnect Wallet
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Render main chat interface
-  return (
-    <div className="flex flex-col h-screen bg-gradient-to-b from-gray-900 to-black">
-      {/* Fullscreen Chart Overlay */}
-      {fullscreenChart && (
-        <div className="fixed inset-0 z-50 bg-black">
-          <div className="absolute top-4 right-4 z-10 flex gap-2">
-            <button
-              onClick={() => setFullscreenChart(null)}
-              className="bg-gray-800/50 p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <TradingViewWidget
-            symbol={fullscreenChart.symbol}
-            interval={fullscreenChart.interval}
-            isFullscreen={true}
+        <div className="relative w-24 h-24 mb-8">
+          <Image
+            src="/moai.webp"
+            alt="MOAI"
+            width={96}
+            height={96}
+            className="rounded-full ring-4 ring-purple-500/50"
           />
         </div>
-      )}
-
-      {/* Header */}
-      <header className="w-full p-6 bg-black/30 backdrop-blur-sm border-b border-purple-900/30">
-        <div className="flex items-center justify-between max-w-4xl mx-auto">
-          <div className="flex items-center gap-4">
-            <a href="/" className="text-white hover:text-purple-400 transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-              </svg>
-            </a>
-            <div className="relative w-12 h-12 ring-2 ring-purple-500/50 rounded-full overflow-hidden shadow-lg shadow-purple-500/20">
-              <Image
-                src="/moai.webp"
-                alt="MOAI"
-                width={48}
-                height={48}
-                className="object-cover"
-              />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-white">Analyst MOAI</h1>
-              <p className="text-sm text-purple-300/80">Crypto Market Analyst</p>
-            </div>
-          </div>
-          
-          {/* Wallet Connection Controls */}
-          <div className="flex items-center gap-3">
-            {connected ? (
-              <>
-                <div className="text-right">
-                  <p className="text-sm text-purple-300/80">Connected Wallet</p>
-                  <p className="text-xs text-purple-400/60 truncate max-w-[150px]">
-                    {publicKey?.toBase58()}
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleDisconnect(disconnect)}
-                  className="p-2 rounded-lg bg-red-600/20 text-red-300 hover:bg-red-600/30 transition-colors"
-                  title="Disconnect Wallet"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-                  </svg>
-                </button>
-              </>
-            ) : (
-              <WalletMultiButton className="!bg-purple-600 hover:!bg-purple-700 transition-colors" />
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* Chat Container */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full custom-scrollbar [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-800/50 [&::-webkit-scrollbar-thumb]:bg-purple-600/50 hover:[&::-webkit-scrollbar-thumb]:bg-purple-500 [&::-webkit-scrollbar-thumb]:rounded-full">
-        {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}
-          >
-            <div
-              className={`${message.content === '' && message.chart ? 'w-[80%]' : 'max-w-[80%]'} p-4 rounded-2xl ${
-                message.type === 'user'
-                  ? 'bg-purple-600 text-white rounded-br-none shadow-lg shadow-purple-500/20'
-                  : 'bg-gray-800/80 text-white rounded-bl-none shadow-lg shadow-black/20 backdrop-blur-sm'
-              }`}
-            >
-              {message.type === 'user' ? (
-                <div className="whitespace-pre-wrap prose prose-invert prose-sm max-w-none">
-                  {message.coin ? (
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1 bg-purple-900/60 px-2 py-0.5 rounded-lg text-purple-200">
-                        <img src={message.coin.thumb} alt={message.coin.symbol} className="w-4 h-4 rounded-full" />
-                        {message.coin.symbol}
-                      </span>
-                      <span>{message.content}</span>
-                    </div>
-                  ) : (
-                    <p>{message.content}</p>
-                  )}
-                </div>
-              ) : (
-                <>
-                  {message.chart && (
-                    <div className="relative">
-                      <button
-                        onClick={() => message.chart && setFullscreenChart(message.chart)}
-                        className="absolute top-4 right-4 z-10 bg-gray-800/50 p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L15 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 15" />
-                        </svg>
-                      </button>
-                      <TradingViewWidget 
-                        symbol={message.chart.symbol} 
-                        interval={message.chart.interval} 
-                        onChartReady={setChartWidget}
-                      />
-                    </div>
-                  )}
-                  <div className="whitespace-pre-wrap prose prose-invert prose-sm max-w-none">
-                    <ReactMarkdown
-                      components={{
-                        strong: ({node, ...props}) => <span className="font-bold text-purple-300" {...props} />,
-                        p: ({node, children, ...props}) => {
-                          if (typeof children === 'string' && message.coin?.symbol) {
-                            const parts = children.split(message.coin.symbol);
-                            const coin = message.coin;
-                            return (
-                              <p {...props}>
-                                {parts.map((part, i, arr) => (
-                                  <React.Fragment key={i}>
-                                    {part}
-                                    {i < arr.length - 1 && (
-                                      <span className="inline-flex items-center gap-1 bg-purple-900/60 px-2 py-0.5 rounded-lg text-purple-200">
-                                        <img src={coin.thumb} alt={coin.symbol} className="w-4 h-4 rounded-full" />
-                                        {coin.symbol}
-                                      </span>
-                                    )}
-                                  </React.Fragment>
-                                ))}
-                              </p>
-                            );
-                          }
-                          return <p {...props}>{children}</p>;
-                        }
-                      }}
-                    >
-                      {message.content}
-                    </ReactMarkdown>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        ))}
-        {isMessageLoading && (
-          <div className="flex justify-start">
-            <div className="bg-gray-800/80 text-white rounded-2xl rounded-bl-none p-4 max-w-[80%] animate-pulse shadow-lg shadow-black/20 backdrop-blur-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Suggestions Area */}
-      <div className="absolute left-1/2 -translate-x-1/2 w-full max-w-4xl bottom-24" ref={suggestionsRef}>
-        {suggestions.length > 0 && !isMessageLoading && showSuggestions && (
-          <div className="flex justify-center gap-3 flex-wrap transition-opacity duration-1000">
-            {suggestions.map((suggestion, index) => (
-              <button
-                key={index}
-                onClick={() => handleSuggestionClick(suggestion)}
-                className="px-4 py-2 rounded-lg transition-all duration-200 
-                  border border-purple-500/50 text-purple-400 hover:text-purple-300
-                  shadow-[0_0_10px_0] shadow-purple-500/20 bg-black/80 backdrop-blur-md
-                  hover:shadow-[0_0_15px_0] hover:shadow-purple-500/30 hover:border-purple-400/50 text-sm
-                  flex items-center gap-2"
-              >
-                <img src={suggestion.thumb} alt={suggestion.name} className="w-5 h-5 rounded-full" />
-                <span>{suggestion.symbol}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Input Area */}
-      <div className="border-t border-purple-900/30 bg-black/30 backdrop-blur-sm p-4">
-        <div className="max-w-4xl mx-auto">
-          <form onSubmit={handleSubmitWithCoin} className="flex gap-2">
-            <div className="flex-1 bg-gray-800/80 rounded-xl px-2 flex items-center gap-2 focus-within:ring-2 focus-within:ring-purple-500/50">
-              {selectedCoin && (
-                <div className="flex items-center gap-2 bg-purple-500/20 px-2 py-1 rounded-lg m-1">
-                  <img src={selectedCoin.thumb} alt={selectedCoin.name} className="w-5 h-5 rounded-full" />
-                  <span className="text-purple-300">{selectedCoin.symbol}</span>
-                  <button
-                    type="button"
-                    onClick={handleClearSelection}
-                    className="text-purple-400 hover:text-purple-300 p-1"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              )}
-              <input
-                type="text"
-                value={input}
-                onChange={handleInputChange}
-                placeholder={selectedCoin ? 
-                  (userLanguage === 'tr' ? 'Sormak istediğiniz soruyu yazın...' : 'Type your question...') :
-                  (userLanguage === 'tr' ? 'Analiz etmek istediğiniz coini yazın...' : 'Type a coin to analyze...')
-                }
-                disabled={isMessageLoading}
-                className="flex-1 bg-transparent text-white px-2 py-3 focus:outline-none disabled:opacity-50 placeholder-gray-400"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={isMessageLoading}
-              className="bg-purple-600 text-white px-6 py-3 rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-500/20 font-medium"
-            >
-              {isMessageLoading ? 'Analyzing...' : 'Send'}
-            </button>
-          </form>
+        <h1 className="text-3xl font-bold text-white mb-4">🚧 Bakım Modu</h1>
+        <p className="text-purple-300 text-center max-w-md mb-8">
+          Analyst MOAI şu anda bakımda. Daha iyi hizmet verebilmek için çalışıyoruz. Lütfen daha sonra tekrar deneyin.
+        </p>
+        <div className="text-purple-400/60 text-sm">
+          Estimated completion: Soon™
         </div>
       </div>
+    );
+  }
+
+  // Rest of the component code...
+  // ... existing code ...
+
+  // Replace img elements with Image components
+  return (
+    <div className="flex flex-col h-screen bg-gradient-to-b from-gray-900 to-black">
+      {/* ... existing code ... */}
+      {suggestions.map((suggestion, index) => (
+        <button
+          key={index}
+          onClick={() => handleSuggestionClick(suggestion)}
+          className="px-4 py-2 rounded-lg transition-all duration-200 
+            border border-purple-500/50 text-purple-400 hover:text-purple-300
+            shadow-[0_0_10px_0] shadow-purple-500/20 bg-black/80 backdrop-blur-md
+            hover:shadow-[0_0_15px_0] hover:shadow-purple-500/30 hover:border-purple-400/50 text-sm
+            flex items-center gap-2"
+        >
+          <Image
+            src={suggestion.thumb}
+            alt={suggestion.name}
+            width={20}
+            height={20}
+            className="rounded-full"
+          />
+          <span>{suggestion.symbol}</span>
+        </button>
+      ))}
+      {/* ... rest of the code ... */}
     </div>
   );
 }

@@ -32,6 +32,7 @@
     "lodash": "^4.17.21",
     "next": "14.1.0",
     "openai": "^4.77.0",
+    "pino-pretty": "^13.0.0",
     "postcss": "^8.4.49",
     "puppeteer": "^22.8.2",
     "puppeteer-core": "^22.8.2",
