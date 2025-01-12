@@ -110,6 +110,24 @@ const handleDisconnect = async (disconnect: () => Promise<void>) => {
   }
 };
 
+async function translateText(text: string): Promise<string> {
+  const translation = await openai.chat.completions.create({
+    messages: [
+      {
+        role: "system",
+        content: "Sen profesyonel bir çevirmensin. Verilen metni Türkçe'ye çevir. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak."
+      },
+      {
+        role: "user",
+        content: text
+      }
+    ],
+    model: "gpt-3.5-turbo",
+  });
+  
+  return translation.choices[0]?.message?.content || text;
+}
+
 export default function JournalistMoai() {
   const hasCheckedBalance = useRef(false);
   const { publicKey, connected, disconnect } = useWallet();
@@ -406,21 +424,19 @@ export default function JournalistMoai() {
               content: userLanguage === 'tr' ? 
                 `Sen profesyonel bir çevirmen ve kripto haber editörüsün. İngilizce haberleri Türkçe'ye çevir ve özetle. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak.
 
-ÖNEMLİ: Her haberi mutlaka Türkçe'ye çevir.
+ÖNEMLİ: Her haberi mutlaka Türkçe'ye çevir. Çeviri yapmadan asla geçme.
 
 JSON formatında dön:
 {
   "title": "çevrilmiş başlık",
-  "content": "çevrilmiş içerik",
-  "isTranslated": true
+  "content": "çevrilmiş içerik"
 }` :
                 `You are a professional translator and crypto news editor. Keep the news in English but summarize if needed. Keep technical terms and cryptocurrency names unchanged.
 
 Return in JSON format:
 {
   "title": "title",
-  "content": "content",
-  "isTranslated": false
+  "content": "content"
 }`
             },
             {
@@ -432,50 +448,60 @@ Return in JSON format:
           response_format: { type: "json_object" }
         });
 
-        const translatedText = JSON.parse(translation.choices[0]?.message?.content || "{}");
-        
-        // Always use translated text for Turkish users
-        const finalTitle = userLanguage === 'tr' ? translatedText.title : news.title;
-        const finalContent = userLanguage === 'tr' ? translatedText.content : news.content;
+        try {
+          const translatedText = JSON.parse(translation.choices[0]?.message?.content || "{}");
+          
+          // Always use translated text for Turkish users, force translation
+          const finalTitle = userLanguage === 'tr' ? 
+            (translatedText.title || await translateText(news.title)) : 
+            news.title;
+            
+          const finalContent = userLanguage === 'tr' ? 
+            (translatedText.content || await translateText(news.content)) : 
+            news.content;
 
-        const summary = await openai.chat.completions.create({
-          messages: [
-            {
-              role: "system",
-              content: userLanguage === 'tr' ?
-                `Sen hızlı ve net özetler yapan bir haber editörüsün.
-                
-                Kurallar:
-                1. Haberi 2 kısa paragrafta özetle
-                2. İlk paragrafta ana konuyu anlat
-                3. İkinci paragrafta önemli detayları ver
-                4. Kısa ve öz cümleler kullan
-                5. Sadece en önemli bilgilere odaklan
-                6. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak` :
-                `You are a news editor who makes quick and clear summaries.
-                
-                Rules:
-                1. Summarize the news in 2 short paragraphs
-                2. First paragraph for the main topic
-                3. Second paragraph for important details
-                4. Use short and concise sentences
-                5. Focus only on the most important information
-                6. Keep technical terms and cryptocurrency names unchanged`
-            },
-            {
-              role: "user",
-              content: `${finalTitle}\n\n${finalContent}`
-            }
-          ],
-          model: "gpt-3.5-turbo",
-        });
+          const summary = await openai.chat.completions.create({
+            messages: [
+              {
+                role: "system",
+                content: userLanguage === 'tr' ?
+                  `Sen hızlı ve net özetler yapan bir haber editörüsün.
+                  
+                  Kurallar:
+                  1. Haberi 2 kısa paragrafta özetle
+                  2. İlk paragrafta ana konuyu anlat
+                  3. İkinci paragrafta önemli detayları ver
+                  4. Kısa ve öz cümleler kullan
+                  5. Sadece en önemli bilgilere odaklan
+                  6. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak` :
+                  `You are a news editor who makes quick and clear summaries.
+                  
+                  Rules:
+                  1. Summarize the news in 2 short paragraphs
+                  2. First paragraph for the main topic
+                  3. Second paragraph for important details
+                  4. Use short and concise sentences
+                  5. Focus only on the most important information
+                  6. Keep technical terms and cryptocurrency names unchanged`
+              },
+              {
+                role: "user",
+                content: `${finalTitle}\n\n${finalContent}`
+              }
+            ],
+            model: "gpt-3.5-turbo",
+          });
 
-        const translationIndicator = userLanguage === 'tr' ? '🔄 ' : '';
-        
-        setMessages(prev => [...prev, {
-          type: 'bot',
-          content: `${translationIndicator}${finalTitle}\n\n${summary.choices[0]?.message?.content || finalContent}\n\nKaynak: <a href="${news.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">${news.sourceText}</a>`
-        }]);
+          const translationIndicator = userLanguage === 'tr' ? '🔄 ' : '';
+          const summaryContent = summary.choices[0]?.message?.content || finalContent;
+          
+          setMessages(prev => [...prev, {
+            type: 'bot',
+            content: `${translationIndicator}${finalTitle}\n\n${summaryContent}\n\nKaynak: <a href="${news.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">${news.sourceText}</a>`
+          }]);
+        } catch (error) {
+          console.error('News processing error:', error);
+        }
       } catch (error) {
         console.error('News processing error:', error);
       }
@@ -698,21 +724,19 @@ Return in JSON format:
                         content: userLanguage === 'tr' ? 
                           `Sen profesyonel bir çevirmen ve kripto haber editörüsün. İngilizce haberleri Türkçe'ye çevir ve özetle. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak.
 
-ÖNEMLİ: Her haberi mutlaka Türkçe'ye çevir.
+ÖNEMLİ: Her haberi mutlaka Türkçe'ye çevir. Çeviri yapmadan asla geçme.
 
 JSON formatında dön:
 {
   "title": "çevrilmiş başlık",
-  "content": "çevrilmiş içerik",
-  "isTranslated": true
+  "content": "çevrilmiş içerik"
 }` :
                           `You are a professional translator and crypto news editor. Keep the news in English but summarize if needed. Keep technical terms and cryptocurrency names unchanged.
 
 Return in JSON format:
 {
   "title": "title",
-  "content": "content",
-  "isTranslated": false
+  "content": "content"
 }`
                       },
                       {
@@ -724,49 +748,60 @@ Return in JSON format:
                     response_format: { type: "json_object" }
                   });
 
-                  const translatedText = JSON.parse(translation.choices[0]?.message?.content || "{}");
-                  
-                  const finalTitle = userLanguage === 'tr' ? translatedText.title : news.title;
-                  const finalContent = userLanguage === 'tr' ? translatedText.content : news.content;
+                  try {
+                    const translatedText = JSON.parse(translation.choices[0]?.message?.content || "{}");
+                    
+                    // Always use translated text for Turkish users, force translation
+                    const finalTitle = userLanguage === 'tr' ? 
+                      (translatedText.title || await translateText(news.title)) : 
+                      news.title;
+                      
+                    const finalContent = userLanguage === 'tr' ? 
+                      (translatedText.content || await translateText(news.content)) : 
+                      news.content;
 
-                  const summary = await openai.chat.completions.create({
-                    messages: [
-                      {
-                        role: "system",
-                        content: userLanguage === 'tr' ?
-                          `Sen hızlı ve net özetler yapan bir haber editörüsün.
-                          
-                          Kurallar:
-                          1. Haberi 2 kısa paragrafta özetle
-                          2. İlk paragrafta ana konuyu anlat
-                          3. İkinci paragrafta önemli detayları ver
-                          4. Kısa ve öz cümleler kullan
-                          5. Sadece en önemli bilgilere odaklan
-                          6. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak` :
-                          `You are a news editor who makes quick and clear summaries.
-                          
-                          Rules:
-                          1. Summarize the news in 2 short paragraphs
-                          2. First paragraph for the main topic
-                          3. Second paragraph for important details
-                          4. Use short and concise sentences
-                          5. Focus only on the most important information
-                          6. Keep technical terms and cryptocurrency names unchanged`
-                      },
-                      {
-                        role: "user",
-                        content: `${finalTitle}\n\n${finalContent}`
-                      }
-                    ],
-                    model: "gpt-3.5-turbo",
-                  });
+                    const summary = await openai.chat.completions.create({
+                      messages: [
+                        {
+                          role: "system",
+                          content: userLanguage === 'tr' ?
+                            `Sen hızlı ve net özetler yapan bir haber editörüsün.
+                            
+                            Kurallar:
+                            1. Haberi 2 kısa paragrafta özetle
+                            2. İlk paragrafta ana konuyu anlat
+                            3. İkinci paragrafta önemli detayları ver
+                            4. Kısa ve öz cümleler kullan
+                            5. Sadece en önemli bilgilere odaklan
+                            6. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak` :
+                            `You are a news editor who makes quick and clear summaries.
+                            
+                            Rules:
+                            1. Summarize the news in 2 short paragraphs
+                            2. First paragraph for the main topic
+                            3. Second paragraph for important details
+                            4. Use short and concise sentences
+                            5. Focus only on the most important information
+                            6. Keep technical terms and cryptocurrency names unchanged`
+                        },
+                        {
+                          role: "user",
+                          content: `${finalTitle}\n\n${finalContent}`
+                        }
+                      ],
+                      model: "gpt-3.5-turbo",
+                    });
 
-                  const translationIndicator = userLanguage === 'tr' ? '🔄 ' : '';
-                  
-                  setMessages(prev => [...prev, {
-                    type: 'bot',
-                    content: `${translationIndicator}${finalTitle}\n\n${summary.choices[0]?.message?.content || finalContent}\n\nKaynak: <a href="${news.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">${news.sourceText}</a>`
-                  }]);
+                    const translationIndicator = userLanguage === 'tr' ? '🔄 ' : '';
+                    const summaryContent = summary.choices[0]?.message?.content || finalContent;
+                    
+                    setMessages(prev => [...prev, {
+                      type: 'bot',
+                      content: `${translationIndicator}${finalTitle}\n\n${summaryContent}\n\nKaynak: <a href="${news.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">${news.sourceText}</a>`
+                    }]);
+                  } catch (error) {
+                    console.error('News processing error:', error);
+                  }
                 } catch (error) {
                   console.error('News processing error:', error);
                 }
