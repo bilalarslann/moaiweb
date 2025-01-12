@@ -128,6 +128,31 @@ async function translateText(text: string): Promise<string> {
   return translation.choices[0]?.message?.content || text;
 }
 
+async function translateSearchTerms(searchText: string): Promise<string> {
+  const translation = await openai.chat.completions.create({
+    messages: [
+      {
+        role: "system",
+        content: `Sen bir arama terimi çevirmensin. Verilen Türkçe arama terimini İngilizce'ye çevir.
+        Kripto para isimleri ve teknik terimleri olduğu gibi bırak.
+        Sadece arama için en uygun İngilizce karşılığını ver.
+        Örnek:
+        - "ethereum pectra gelişmeleri" -> "ethereum pectra updates"
+        - "bitcoin fiyat analizi" -> "bitcoin price analysis"
+        - "solana son durum" -> "solana latest news"
+        `
+      },
+      {
+        role: "user",
+        content: searchText
+      }
+    ],
+    model: "gpt-3.5-turbo",
+  });
+  
+  return translation.choices[0]?.message?.content || searchText;
+}
+
 export default function JournalistMoai() {
   const hasCheckedBalance = useRef(false);
   const { publicKey, connected, disconnect } = useWallet();
@@ -510,219 +535,111 @@ Return in JSON format:
   };
 
   const handleSubmit = async (e: React.FormEvent, directMessage?: string) => {
-    e.preventDefault();
-    if ((!input.trim() && !directMessage) || isMessageLoading) return;
-
-    const userMessage = directMessage || input;
+    e?.preventDefault();
+    
+    const searchText = directMessage || input;
+    if (!searchText.trim()) return;
+    
     setInput('');
+    setLastSearchTerm(searchText);
+    setMessages(prev => [...prev, { type: 'user', content: searchText }]);
     setIsMessageLoading(true);
 
-    setMessages(prev => [...prev, { type: 'user', content: userMessage }]);
-
     try {
-      // Check if user is asking for more news
-      const moreNewsRegexTR = /(birkaç|daha fazla|başka|diğer).*(haber|göster)/i;
-      const moreNewsRegexEN = /(more|other|additional).*(news|show)/i;
+      // Translate search terms to English while keeping original for display
+      const englishSearchTerms = await translateSearchTerms(searchText);
+      const searchTerms = englishSearchTerms.toLowerCase().split(' ');
+      
+      // Display the search message in Turkish
+      const searchMessage = userLanguage === 'tr' ? 
+        `🗞️ ${searchText.toUpperCase()} hakkında ` :
+        `🗞️ Found news about ${searchText.toUpperCase()} `;
 
-      if ((moreNewsRegexTR.test(userMessage) || moreNewsRegexEN.test(userMessage))) {
-        // Instead of showing more news, we'll just treat it as a new search
-        // The suggestions will guide users to make specific queries
+      // Rest of the search logic using englishSearchTerms
+      const response = await fetch('/api/news');
+      if (!response.ok) {
+        throw new Error('News API request failed');
+      }
+
+      const data = await response.json();
+      if (!data.news_results || !data.news_results.length) {
         setMessages(prev => [...prev, {
           type: 'bot',
           content: userLanguage === 'tr' ?
-            'Lütfen yukarıdaki önerilerden birini seçin veya yeni bir arama yapın.' :
-            'Please select one of the suggestions above or make a new search.'
+            'Üzgünüm, bu konu hakkında güncel haber bulamadım.' :
+            'Sorry, I could not find any recent news on this topic.'
         }]);
         setIsMessageLoading(false);
         return;
       }
 
-      // First, detect the language of the user's message
-      const languageDetection = await openai.chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content: `You are a language detector. Analyze the given text and return ONLY "tr" for Turkish or "en" for English in your response. Nothing else.`
-          },
-          {
-            role: "user",
-            content: userMessage
+      // Alakalılık skorunu hesapla ve haberleri filtrele
+      const scoredNews = data.news_results
+        .map((article: any) => {
+          const combinedText = `${article.title} ${article.snippet}`.toLowerCase();
+          
+          // Alakalılık skoru hesapla
+          let relevanceScore = 0;
+          let matchedTerms = 0;
+
+          // Tüm terimlerin eşleşmesini kontrol et
+          searchTerms.forEach((term: string) => {
+            if (combinedText.includes(term.toLowerCase())) {
+              matchedTerms++;
+              relevanceScore += 1;
+            }
+          });
+
+          // Tüm terimler varsa bonus puan
+          if (matchedTerms === searchTerms.length) {
+            relevanceScore += 2;
           }
-        ],
-        model: "gpt-3.5-turbo",
-      });
 
-      const detectedLanguage = languageDetection.choices[0]?.message?.content?.trim().toLowerCase() as 'en' | 'tr';
-      setUserLanguage(detectedLanguage);
-
-      // Analyze message for keywords
-      const keywordCompletion = await openai.chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content: detectedLanguage === 'tr' ? 
-              `Verilen mesajdan arama terimlerini çıkar.
-              
-              Önemli kurallar:
-              1. Sadece "haberleri", "haber", "haberler" gibi son ekleri çıkar
-              2. Özel terimleri ve birleşik kelimeleri koru:
-                 - "ethereum 2.0" -> "ethereum 2.0"
-                 - "ethereum the merge" -> "ethereum the merge"
-                 - "bitcoin halving" -> "bitcoin halving"
-              3. Kripto para isimleri ve teknoloji terimlerini doğru şekilde birleştir
-              4. Türkçe karakterleri İngilizce karşılıklarıyla değiştir
-              5. Her mesajı haber isteği olarak değerlendir
-              6. Arama konusunu daraltacak ek terimleri koru:
-                 - "AI Agents updates" -> "AI Agents updates"
-                 - "Ethereum security" -> "Ethereum security"
-                 - "Bitcoin mining news" -> "Bitcoin mining"
-              
-              Örnek:
-              - "bitcoin haberleri" -> "bitcoin"
-              - "ethereum the merge haberleri" -> "ethereum the merge"
-              - "ethereum 2.0 güncellemesi haberleri" -> "ethereum 2.0 updates"
-              - "bitcoin halving ne zaman" -> "bitcoin halving"
-              - "AI Ajanlar hakkında" -> "AI Agents"
-              - "AI Agents recent updates" -> "AI Agents updates"
-              - "Ethereum security news" -> "Ethereum security"
-              
-              Cevabı JSON formatında ver:
-              {
-                "display_terms": ["gösterilecek_terim"],
-                "search_terms": ["arama_terimi"],
-                "isNewsRequest": true
-              }` :
-              `Extract search terms from the given message.
-              
-              Important rules:
-              1. Only remove suffixes like "news", "updates" if they are standalone
-              2. Preserve special terms and compound words:
-                 - "ethereum 2.0" -> "ethereum 2.0"
-                 - "ethereum the merge" -> "ethereum the merge"
-                 - "bitcoin halving" -> "bitcoin halving"
-              3. Correctly combine cryptocurrency names and technology terms
-              4. Keep English characters
-              5. Treat every message as a news request
-              6. Keep additional terms that narrow down the search:
-                 - "AI Agents updates" -> "AI Agents updates"
-                 - "Ethereum security" -> "Ethereum security"
-                 - "Bitcoin mining news" -> "Bitcoin mining"
-              
-              Example:
-              - "bitcoin news" -> "bitcoin"
-              - "ethereum the merge news" -> "ethereum the merge"
-              - "ethereum 2.0 update news" -> "ethereum 2.0 updates"
-              - "when is bitcoin halving" -> "bitcoin halving"
-              - "About AI Agents" -> "AI Agents"
-              - "AI Agents recent updates" -> "AI Agents updates"
-              - "Ethereum security news" -> "Ethereum security"
-              
-              Return in JSON format:
-              {
-                "display_terms": ["display_term"],
-                "search_terms": ["search_term"],
-                "isNewsRequest": true
-              }`
-          },
-          {
-            role: "user",
-            content: userMessage
+          // Tam eşleşme varsa ekstra bonus
+          if (combinedText.includes(searchText.toLowerCase())) {
+            relevanceScore += 3;
           }
-        ],
-        model: "gpt-4-turbo-preview",
-        response_format: { type: "json_object" }
-      });
 
-      const response = JSON.parse(keywordCompletion.choices[0]?.message?.content || "{}");
+          // Kripto haber sitelerinden gelenlere ek puan
+          const cryptoSites = ['cointelegraph.com', 'coindesk.com', 'decrypt.co', 'theblockcrypto.com', 'cryptonews.com'];
+          if (article.link) {
+            cryptoSites.forEach(site => {
+              if (article.link.includes(site)) {
+                relevanceScore += 0.5;
+              }
+            });
+          }
 
-      if (response.display_terms?.length > 0) {
-        if (response.isNewsRequest) {
-          try {
-            // Google News RSS feed'den haberleri çek
-            const mainResponse = await fetch(`/api/news?q=${encodeURIComponent(response.search_terms[0])}`);
-            const mainNewsData = await mainResponse.json();
-            
-            // Store the search term for suggestions
-            setLastSearchTerm(response.search_terms[0]);
+          return {
+            title: article.title,
+            content: article.snippet,
+            description: article.snippet,
+            date: article.date,
+            sourceUrl: article.link,
+            sourceText: article.source,
+            relevanceScore,
+            imageUrl: article.thumbnail
+          };
+        })
+        .filter((article: ScoredArticle) => article.relevanceScore > searchTerms.length) // En az tüm terimler eşleşmeli
+        .sort((a: ScoredArticle, b: ScoredArticle) => b.relevanceScore - a.relevanceScore);
 
-            // Show language-specific news announcement with display term
-            setMessages(prev => [...prev, {
-              type: 'bot',
-              content: detectedLanguage === 'tr' ? 
-                `🗞️ ${response.display_terms[0].toUpperCase()} hakkında ${mainNewsData.news_results?.length || 0} haber buldum...` :
-                `🗞️ Found ${mainNewsData.news_results?.length || 0} news about ${response.display_terms[0].toUpperCase()}...`
-            }]);
+      // Store all scored news for later use
+      setLastNewsData(scoredNews);
+      setLastNewsIndex(5);
 
-            let allNews = [];
-            if (mainNewsData.news_results && mainNewsData.news_results.length > 0) {
-              // Alakalılık skorunu hesapla ve haberleri filtrele
-              const searchTerms = response.search_terms[0].toLowerCase().split(' ');
-              const scoredNews = mainNewsData.news_results
-                .map((article: any) => {
-                  const combinedText = `${article.title} ${article.snippet}`.toLowerCase();
-                  
-                  // Alakalılık skoru hesapla
-                  let relevanceScore = 0;
-                  let matchedTerms = 0;
-
-                  // Tüm terimlerin eşleşmesini kontrol et
-                  searchTerms.forEach((term: string) => {
-                    if (combinedText.includes(term.toLowerCase())) {
-                      matchedTerms++;
-                      relevanceScore += 1;
-                    }
-                  });
-
-                  // Tüm terimler varsa bonus puan
-                  if (matchedTerms === searchTerms.length) {
-                    relevanceScore += 2;
-                  }
-
-                  // Tam eşleşme varsa ekstra bonus
-                  if (combinedText.includes(response.search_terms[0].toLowerCase())) {
-                    relevanceScore += 3;
-                  }
-
-                  // Kripto haber sitelerinden gelenlere ek puan
-                  const cryptoSites = ['cointelegraph.com', 'coindesk.com', 'decrypt.co', 'theblockcrypto.com', 'cryptonews.com'];
-                  if (article.link) {
-                    cryptoSites.forEach(site => {
-                      if (article.link.includes(site)) {
-                        relevanceScore += 0.5;
-                      }
-                    });
-                  }
-
-                  return {
-                    title: article.title,
-                    content: article.snippet,
-                    description: article.snippet,
-                    date: article.date,
-                    sourceUrl: article.link,
-                    sourceText: article.source,
-                    relevanceScore,
-                    imageUrl: article.thumbnail
-                  };
-                })
-                .filter((article: ScoredArticle) => article.relevanceScore > searchTerms.length) // En az tüm terimler eşleşmeli
-                .sort((a: ScoredArticle, b: ScoredArticle) => b.relevanceScore - a.relevanceScore);
-
-              // Store all scored news for later use
-              setLastNewsData(scoredNews);
-              setLastNewsIndex(5);
-
-              // Display first 5 news
-              const firstBatch = scoredNews.slice(0, 5);
-              
-              // Process and display each news
-              for (const news of firstBatch) {
-                try {
-                  const translation = await openai.chat.completions.create({
-                    messages: [
-                      {
-                        role: "system",
-                        content: userLanguage === 'tr' ? 
-                          `Sen profesyonel bir çevirmen ve kripto haber editörüsün. İngilizce haberleri Türkçe'ye çevir ve özetle. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak.
+      // Display first 5 news
+      const firstBatch = scoredNews.slice(0, 5);
+      
+      // Process and display each news
+      for (const news of firstBatch) {
+        try {
+          const translation = await openai.chat.completions.create({
+            messages: [
+              {
+                role: "system",
+                content: userLanguage === 'tr' ? 
+                  `Sen profesyonel bir çevirmen ve kripto haber editörüsün. İngilizce haberleri Türkçe'ye çevir ve özetle. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak.
 
 ÖNEMLİ: Her haberi mutlaka Türkçe'ye çevir. Çeviri yapmadan asla geçme.
 
@@ -731,166 +648,89 @@ JSON formatında dön:
   "title": "çevrilmiş başlık",
   "content": "çevrilmiş içerik"
 }` :
-                          `You are a professional translator and crypto news editor. Keep the news in English but summarize if needed. Keep technical terms and cryptocurrency names unchanged.
+                  `You are a professional translator and crypto news editor. Keep the news in English but summarize if needed. Keep technical terms and cryptocurrency names unchanged.
 
 Return in JSON format:
 {
   "title": "title",
   "content": "content"
 }`
-                      },
-                      {
-                        role: "user",
-                        content: `Title: ${news.title}\nContent: ${news.content}`
-                      }
-                    ],
-                    model: "gpt-4-turbo-preview",
-                    response_format: { type: "json_object" }
-                  });
-
-                  try {
-                    const translatedText = JSON.parse(translation.choices[0]?.message?.content || "{}");
-                    
-                    // Always use translated text for Turkish users, force translation
-                    const finalTitle = userLanguage === 'tr' ? 
-                      (translatedText.title || await translateText(news.title)) : 
-                      news.title;
-                      
-                    const finalContent = userLanguage === 'tr' ? 
-                      (translatedText.content || await translateText(news.content)) : 
-                      news.content;
-
-                    const summary = await openai.chat.completions.create({
-                      messages: [
-                        {
-                          role: "system",
-                          content: userLanguage === 'tr' ?
-                            `Sen hızlı ve net özetler yapan bir haber editörüsün.
-                            
-                            Kurallar:
-                            1. Haberi 2 kısa paragrafta özetle
-                            2. İlk paragrafta ana konuyu anlat
-                            3. İkinci paragrafta önemli detayları ver
-                            4. Kısa ve öz cümleler kullan
-                            5. Sadece en önemli bilgilere odaklan
-                            6. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak` :
-                            `You are a news editor who makes quick and clear summaries.
-                            
-                            Rules:
-                            1. Summarize the news in 2 short paragraphs
-                            2. First paragraph for the main topic
-                            3. Second paragraph for important details
-                            4. Use short and concise sentences
-                            5. Focus only on the most important information
-                            6. Keep technical terms and cryptocurrency names unchanged`
-                        },
-                        {
-                          role: "user",
-                          content: `${finalTitle}\n\n${finalContent}`
-                        }
-                      ],
-                      model: "gpt-3.5-turbo",
-                    });
-
-                    const translationIndicator = userLanguage === 'tr' ? '🔄 ' : '';
-                    const summaryContent = summary.choices[0]?.message?.content || finalContent;
-                    
-                    setMessages(prev => [...prev, {
-                      type: 'bot',
-                      content: `${translationIndicator}${finalTitle}\n\n${summaryContent}\n\nKaynak: <a href="${news.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">${news.sourceText}</a>`
-                    }]);
-                  } catch (error) {
-                    console.error('News processing error:', error);
-                  }
-                } catch (error) {
-                  console.error('News processing error:', error);
-                }
-              }
-              setIsMessageLoading(false);
-            } else {
-              setMessages(prev => [...prev, {
-                type: 'bot',
-                content: detectedLanguage === 'tr' ?
-                  'Üzgünüm, bu konu hakkında güncel haber bulamadım.' :
-                  'Sorry, I could not find any recent news on this topic.'
-              }]);
-              setIsMessageLoading(false);
-            }
-          } catch (error) {
-            console.error('Error fetching news:', error);
-            setMessages(prev => [...prev, {
-              type: 'bot',
-              content: detectedLanguage === 'tr' ?
-                'Üzgünüm, haberleri getirirken bir hata oluştu. Lütfen tekrar deneyin.' :
-                'Sorry, an error occurred while fetching the news. Please try again.'
-            }]);
-          }
-        } else {
-          // Regular OpenAI response when no keywords found
-          const completion = await openai.chat.completions.create({
-            messages: [
-              {
-                role: "system",
-                content: detectedLanguage === 'tr' ?
-                  "Sen GAZETECİ MOAI adında bir kripto para ve blockchain uzmanı yapay zeka asistanısın. Sorulara detaylı ve anlaşılır cevaplar vermelisin. Her zaman nazik ve yardımsever olmalısın. Cevaplarının sonuna 'Bu bilgiler sadece eğitim amaçlıdır, yatırım tavsiyesi değildir.' notunu eklemelisin." :
-                  "You are JOURNALIST MOAI, an AI assistant specializing in cryptocurrency and blockchain. You should provide detailed and clear answers. Always be polite and helpful. Add the note 'This information is for educational purposes only, not investment advice.' at the end of your responses."
               },
               {
                 role: "user",
-                content: userMessage
+                content: `Title: ${news.title}\nContent: ${news.content}`
               }
             ],
-            model: "gpt-3.5-turbo",
+            model: "gpt-4-turbo-preview",
+            response_format: { type: "json_object" }
           });
 
-          const botResponse = completion.choices[0]?.message?.content || 
-            (detectedLanguage === 'tr' ? "Üzgünüm, bir hata oluştu." : "Sorry, an error occurred.");
+          try {
+            const translatedText = JSON.parse(translation.choices[0]?.message?.content || "{}");
             
-          setMessages(prev => [...prev, {
-            type: 'bot',
-            content: botResponse + "\n\n⚠️ " + 
-              (detectedLanguage === 'tr' ?
-                "Bu bilgiler sadece eğitim amaçlıdır, yatırım tavsiyesi değildir." :
-                "This information is for educational purposes only, not investment advice.")
-          }]);
+            // Always use translated text for Turkish users, force translation
+            const finalTitle = userLanguage === 'tr' ? 
+              (translatedText.title || await translateText(news.title)) : 
+              news.title;
+              
+            const finalContent = userLanguage === 'tr' ? 
+              (translatedText.content || await translateText(news.content)) : 
+              news.content;
+
+            const summary = await openai.chat.completions.create({
+              messages: [
+                {
+                  role: "system",
+                  content: userLanguage === 'tr' ?
+                    `Sen hızlı ve net özetler yapan bir haber editörüsün.
+                    
+                    Kurallar:
+                    1. Haberi 2 kısa paragrafta özetle
+                    2. İlk paragrafta ana konuyu anlat
+                    3. İkinci paragrafta önemli detayları ver
+                    4. Kısa ve öz cümleler kullan
+                    5. Sadece en önemli bilgilere odaklan
+                    6. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak` :
+                    `You are a news editor who makes quick and clear summaries.
+                    
+                    Rules:
+                    1. Summarize the news in 2 short paragraphs
+                    2. First paragraph for the main topic
+                    3. Second paragraph for important details
+                    4. Use short and concise sentences
+                    5. Focus only on the most important information
+                    6. Keep technical terms and cryptocurrency names unchanged`
+                },
+                {
+                  role: "user",
+                  content: `${finalTitle}\n\n${finalContent}`
+                }
+              ],
+              model: "gpt-3.5-turbo",
+            });
+
+            const translationIndicator = userLanguage === 'tr' ? '🔄 ' : '';
+            const summaryContent = summary.choices[0]?.message?.content || finalContent;
+            
+            setMessages(prev => [...prev, {
+              type: 'bot',
+              content: `${translationIndicator}${finalTitle}\n\n${summaryContent}\n\nKaynak: <a href="${news.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">${news.sourceText}</a>`
+            }]);
+          } catch (error) {
+            console.error('News processing error:', error);
+          }
+        } catch (error) {
+          console.error('News processing error:', error);
         }
-      } else {
-        // Regular OpenAI response when no keywords found
-        const completion = await openai.chat.completions.create({
-          messages: [
-            {
-              role: "system",
-              content: detectedLanguage === 'tr' ?
-                "Sen GAZETECİ MOAI adında bir kripto para ve blockchain uzmanı yapay zeka asistanısın. Sorulara detaylı ve anlaşılır cevaplar vermelisin. Her zaman nazik ve yardımsever olmalısın. Cevaplarının sonuna 'Bu bilgiler sadece eğitim amaçlıdır, yatırım tavsiyesi değildir.' notunu eklemelisin." :
-                "You are JOURNALIST MOAI, an AI assistant specializing in cryptocurrency and blockchain. You should provide detailed and clear answers. Always be polite and helpful. Add the note 'This information is for educational purposes only, not investment advice.' at the end of your responses."
-            },
-            {
-              role: "user",
-              content: userMessage
-            }
-          ],
-          model: "gpt-3.5-turbo",
-        });
-
-        const botResponse = completion.choices[0]?.message?.content || 
-          (detectedLanguage === 'tr' ? "Üzgünüm, bir hata oluştu." : "Sorry, an error occurred.");
-          
-        setMessages(prev => [...prev, {
-          type: 'bot',
-          content: botResponse + "\n\n⚠️ " + 
-            (detectedLanguage === 'tr' ?
-              "Bu bilgiler sadece eğitim amaçlıdır, yatırım tavsiyesi değildir." :
-              "This information is for educational purposes only, not investment advice.")
-        }]);
       }
-
+      setIsMessageLoading(false);
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error fetching news:', error);
       setMessages(prev => [...prev, {
         type: 'bot',
         content: userLanguage === 'tr' ?
-          'Üzgünüm, bir hata oluştu. Lütfen tekrar deneyin.' :
-          'Sorry, an error occurred. Please try again.'
+          'Üzgünüm, haberleri getirirken bir hata oluştu. Lütfen tekrar deneyin.' :
+          'Sorry, an error occurred while fetching the news. Please try again.'
       }]);
     }
 
