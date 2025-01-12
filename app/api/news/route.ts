@@ -61,7 +61,7 @@ export async function GET(request: Request) {
     
     // Tüm URL'leri dene
     let feed = null;
-    let lastError = null;
+    let lastError: Error | null = null;
 
     for (const getUrl of RSS_URLS) {
       try {
@@ -70,7 +70,7 @@ export async function GET(request: Request) {
           break; // Başarılı sonuç aldık
         }
       } catch (error) {
-        lastError = error;
+        lastError = error instanceof Error ? error : new Error('Unknown error');
         console.error(`Error with URL ${getUrl(searchQuery)}:`, error);
         continue; // Sonraki URL'yi dene
       }
