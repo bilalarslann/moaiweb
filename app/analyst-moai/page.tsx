@@ -109,7 +109,11 @@ declare global {
 interface ChartData {
   price: number | null;
   rsi: number | null;
-  sma: number | null;
+  sma: {
+    sma20: number | null;
+    sma50: number | null;
+    sma200: number | null;
+  };
   bb: {
     upper: number | null;
     middle: number | null;
@@ -139,6 +143,17 @@ interface ChartData {
     price_trend: number[];
     market_cap_trend: number[];
   };
+  ohlc: Array<{
+    time: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+  }>;
+  volumeProfile: Array<{
+    price: number;
+    volume: number;
+  }>;
 }
 
 interface StudyValues {
@@ -425,29 +440,34 @@ const getChartData = async (symbol: string): Promise<ChartData | null> => {
 
     // Calculate RSI with more accurate data
     const rsiPeriod = 14;
-    const changes = prices.slice(1).map((price, i) => price - prices[i]);
-    const gains = changes.map(change => change > 0 ? change : 0);
-    const losses = changes.map(change => change < 0 ? -change : 0);
+    const changes = prices.slice(1).map((price: number, i: number) => price - prices[i]);
+    const gains = changes.map((change: number) => change > 0 ? change : 0);
+    const losses = changes.map((change: number) => change < 0 ? -change : 0);
     
-    const avgGain = gains.slice(-rsiPeriod).reduce((a, b) => a + b, 0) / rsiPeriod;
-    const avgLoss = losses.slice(-rsiPeriod).reduce((a, b) => a + b, 0) / rsiPeriod;
+    const avgGain = gains.slice(-rsiPeriod).reduce((a: number, b: number) => a + b, 0) / rsiPeriod;
+    const avgLoss = losses.slice(-rsiPeriod).reduce((a: number, b: number) => a + b, 0) / rsiPeriod;
     const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
     const rsi = 100 - (100 / (1 + rs));
 
     // Calculate multiple SMAs
-    const sma20 = prices.slice(-20).reduce((a, b) => a + b, 0) / 20;
-    const sma50 = prices.slice(-50).reduce((a, b) => a + b, 0) / 50;
-    const sma200 = prices.slice(-200).reduce((a, b) => a + b, 0) / 200;
+    const sma20 = prices.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20;
+    const sma50 = prices.slice(-50).reduce((a: number, b: number) => a + b, 0) / 50;
+    const sma200 = prices.slice(-200).reduce((a: number, b: number) => a + b, 0) / 200;
 
     // Calculate Bollinger Bands with more precision
     const bbPeriod = 20;
     const bbMultiplier = 2;
     const bbPrices = prices.slice(-bbPeriod);
-    const bbSMA = bbPrices.reduce((a, b) => a + b, 0) / bbPeriod;
-    const bbStdDev = Math.sqrt(bbPrices.reduce((sum, price) => sum + Math.pow(price - bbSMA, 2), 0) / bbPeriod);
+    const bbSMA = bbPrices.reduce((a: number, b: number) => a + b, 0) / bbPeriod;
+    const bbStdDev = Math.sqrt(bbPrices.reduce((sum: number, price: number) => sum + Math.pow(price - bbSMA, 2), 0) / bbPeriod);
 
     // Calculate volume profile
-    const volumeProfile = ohlc.reduce((acc: any[], candle) => {
+    interface VolumeLevel {
+      price: number;
+      volume: number;
+    }
+
+    const volumeProfile = ohlc.reduce((acc: VolumeLevel[], candle: SeriesData) => {
       const priceLevel = Math.floor(candle.close / (currentPrice * 0.01)) * (currentPrice * 0.01);
       const existingLevel = acc.find(level => level.price === priceLevel);
       if (existingLevel) {
@@ -456,15 +476,15 @@ const getChartData = async (symbol: string): Promise<ChartData | null> => {
         acc.push({ price: priceLevel, volume: 1 });
       }
       return acc;
-    }, []).sort((a, b) => b.volume - a.volume);
+    }, []).sort((a: VolumeLevel, b: VolumeLevel) => b.volume - a.volume);
 
     // Find support and resistance using volume profile
     const significantLevels = volumeProfile
-      .filter(level => level.volume > volumeProfile[0].volume * 0.3)
-      .map(level => level.price);
+      .filter((level: VolumeLevel) => level.volume > volumeProfile[0].volume * 0.3)
+      .map((level: VolumeLevel) => level.price);
 
-    const supports = significantLevels.filter(level => level < currentPrice).slice(0, 3);
-    const resistances = significantLevels.filter(level => level > currentPrice).slice(0, 3);
+    const supports = significantLevels.filter((level: number) => level < currentPrice).slice(0, 3);
+    const resistances = significantLevels.filter((level: number) => level > currentPrice).slice(0, 3);
 
     return {
       price: Number(currentPrice.toFixed(5)),
@@ -479,8 +499,8 @@ const getChartData = async (symbol: string): Promise<ChartData | null> => {
         middle: Number(bbSMA.toFixed(5)),
         lower: Number((bbSMA - bbMultiplier * bbStdDev).toFixed(5))
       },
-      supports: supports.map(level => Number(level.toFixed(5))),
-      resistances: resistances.map(level => Number(level.toFixed(5))),
+      supports: supports.map((level: number) => Number(level.toFixed(5))),
+      resistances: resistances.map((level: number) => Number(level.toFixed(5))),
       market_data: {
         price_change_24h: Number(coinData.market_data?.price_change_percentage_24h?.toFixed(2)) || 0,
         volume_24h: Number(coinData.market_data?.total_volume?.usd?.toFixed(0)) || 0,
@@ -499,18 +519,18 @@ const getChartData = async (symbol: string): Promise<ChartData | null> => {
         max_supply: Number(coinData.market_data?.max_supply?.toFixed(0)) || 0
       },
       trends: {
-        volume_trend: volumes.slice(-7).map(v => Number(v.toFixed(0))),
-        price_trend: prices.slice(-7).map(p => Number(p.toFixed(5))),
-        market_cap_trend: marketCaps.slice(-7).map(m => Number(m.toFixed(0)))
+        volume_trend: volumes.slice(-7).map((v: number) => Number(v.toFixed(0))),
+        price_trend: prices.slice(-7).map((p: number) => Number(p.toFixed(5))),
+        market_cap_trend: marketCaps.slice(-7).map((m: number) => Number(m.toFixed(0)))
       },
-      ohlc: ohlc.slice(-30).map(candle => ({
+      ohlc: ohlc.slice(-30).map((candle: SeriesData) => ({
         time: candle.time,
         open: Number(candle.open.toFixed(5)),
         high: Number(candle.high.toFixed(5)),
         low: Number(candle.low.toFixed(5)),
         close: Number(candle.close.toFixed(5))
       })),
-      volumeProfile: volumeProfile.slice(0, 10).map(level => ({
+      volumeProfile: volumeProfile.slice(0, 10).map((level: VolumeLevel) => ({
         price: Number(level.price.toFixed(5)),
         volume: level.volume
       }))
