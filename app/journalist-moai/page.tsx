@@ -385,13 +385,13 @@ export default function JournalistMoai() {
 
           // Initial suggestions (news topics)
           const newSuggestions = userLanguage === 'tr' ? [
-            `${cleanTerm} hakkında daha fazla haber`,
-            `${cleanTerm} gelişmeleri`,
-            `${cleanTerm} güncellemeler`
+            'AI agent haberleri',
+            'Ethereum güncellemeleri',
+            'Blockchain haberleri'
           ] : [
-            `More news about ${cleanTerm}`,
-            `${cleanTerm} updates`,
-            `${cleanTerm} developments`
+            'AI agent news',
+            'Ethereum updates',
+            'Blockchain news'
           ];
           setSuggestions(newSuggestions);
           setTimeout(() => {
@@ -403,23 +403,6 @@ export default function JournalistMoai() {
       return () => clearTimeout(timer);
     }
   }, [lastMessageTime, isLoading, lastSearchTerm, userLanguage]);
-
-  // When component mounts, show initial suggestions
-  useEffect(() => {
-    const initialSuggestions = userLanguage === 'tr' ? [
-      'AI agent haberleri',
-      'Ethereum güncellemeleri',
-      'Blockchain haberleri'
-    ] : [
-      'AI agent news',
-      'Ethereum updates',
-      'Blockchain news'
-    ];
-    setSuggestions(initialSuggestions);
-    setTimeout(() => {
-      setShowSuggestions(true);
-    }, 100);
-  }, [userLanguage]);
 
   // Update suggestions when lastSearchTerm changes
   useEffect(() => {
