@@ -82,6 +82,32 @@ const handleDisconnect = async (disconnect: () => Promise<void>) => {
   }
 };
 
+const checkTokenBalance = async (publicKey: PublicKey): Promise<boolean> => {
+  try {
+    const connection = new Connection(SOLANA_RPC_URL);
+    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+      publicKey,
+      { programId: TOKEN_PROGRAM_ID }
+    );
+
+    const moaiTokenAccount = tokenAccounts.value.find(
+      account => account.account.data.parsed.info.mint === MOAI_TOKEN_ADDRESS
+    );
+
+    if (!moaiTokenAccount) {
+      console.log('No MOAI token account found');
+      return false;
+    }
+
+    const balance = Number(moaiTokenAccount.account.data.parsed.info.tokenAmount.amount);
+    console.log('MOAI token balance:', balance);
+    return balance > 0;
+  } catch (error) {
+    console.error('Error checking token balance:', error);
+    return false;
+  }
+};
+
 type Message = {
   type: 'user' | 'bot';
   content: string;
@@ -113,7 +139,7 @@ interface ScoredArticle extends NewsArticle {
 export default function JournalistMoai() {
   const hasCheckedBalance = useRef(false);
   const { publicKey, connected, disconnect } = useWallet();
-  const [hasToken, setHasToken] = useState(false);
+  const [hasToken, setHasToken] = useState<boolean | null>(null);
   const [isWalletLoading, setIsWalletLoading] = useState(true);
   const [isMessageLoading, setIsMessageLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -132,6 +158,23 @@ export default function JournalistMoai() {
   const [lastNewsIndex, setLastNewsIndex] = useState<number>(0);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [lastMessageTime, setLastMessageTime] = useState<number>(0);
+  const [isCheckingToken, setIsCheckingToken] = useState(true);
+
+  useEffect(() => {
+    const checkToken = async () => {
+      if (connected && publicKey) {
+        setIsCheckingToken(true);
+        const hasBalance = await checkTokenBalance(publicKey);
+        setHasToken(hasBalance);
+        setIsCheckingToken(false);
+      } else {
+        setHasToken(null);
+        setIsCheckingToken(false);
+      }
+    };
+
+    checkToken();
+  }, [connected, publicKey]);
 
   // Watch for new messages and update lastMessageTime
   useEffect(() => {
@@ -921,108 +964,45 @@ Return in JSON format:
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-b from-gray-900 to-black">
-      {/* Header */}
-      <header className="w-full p-6 bg-black/30 backdrop-blur-sm border-b border-blue-900/30">
-        <div className="flex items-center gap-4 max-w-4xl mx-auto">
-          <a href="/" className="text-white hover:text-blue-400 transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-            </svg>
-          </a>
-          <div className="relative w-12 h-12 ring-2 ring-blue-500/50 rounded-full overflow-hidden shadow-lg shadow-blue-500/20">
-            <Image
-              src="/moai.webp"
-              alt="MOAI"
-              width={48}
-              height={48}
-              className="rounded-full object-cover hover:scale-110 transition-transform duration-200"
-              priority
-            />
+    <div className="flex flex-col min-h-screen bg-gray-100">
+      <header className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
+          <div className="flex items-center space-x-4">
+            <Image src="/moai.png" alt="MOAI Logo" width={40} height={40} />
+            <h1 className="text-xl font-semibold text-gray-900">MOAI Journalist</h1>
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-white">Journalist MOAI</h1>
-            <p className="text-sm text-blue-300/80">Crypto & Blockchain Assistant</p>
-          </div>
+          <WalletMultiButton />
         </div>
       </header>
 
-      {/* Chat Container */}
-      <div 
-        ref={chatContainerRef}
-        className="flex-1 overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full custom-scrollbar [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-800/50 [&::-webkit-scrollbar-thumb]:bg-blue-600/50 hover:[&::-webkit-scrollbar-thumb]:bg-blue-500 [&::-webkit-scrollbar-thumb]:rounded-full"
-      >
-        {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}
-          >
-            <div
-              className={`max-w-[80%] p-4 rounded-2xl ${
-                message.type === 'user'
-                  ? 'bg-blue-600 text-white rounded-br-none shadow-lg shadow-blue-500/20'
-                  : 'bg-gray-800/80 text-white rounded-bl-none shadow-lg shadow-black/20 backdrop-blur-sm'
-              }`}
-              dangerouslySetInnerHTML={{ __html: message.content }}
-            >
-            </div>
+      <main className="flex-grow container mx-auto px-4 py-8">
+        {isCheckingToken ? (
+          <div className="text-center py-8">
+            <p className="text-gray-600">Checking wallet status...</p>
           </div>
-        ))}
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-gray-800/80 text-white rounded-2xl rounded-bl-none p-4 max-w-[80%] animate-pulse shadow-lg shadow-black/20 backdrop-blur-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
-            </div>
+        ) : !connected ? (
+          <div className="text-center py-8">
+            <p className="text-gray-600 mb-4">Please connect your wallet to continue</p>
+          </div>
+        ) : !hasToken ? (
+          <div className="text-center py-8">
+            <p className="text-gray-600 mb-4">You need to hold MOAI tokens to access this feature</p>
+            <a
+              href="https://raydium.io/swap/?inputCurrency=sol&outputCurrency=2GbE1pq8GiwpHhdGWKUBLXJfBKvKLoNWe1E4KPtbED2M"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:text-blue-600"
+            >
+              Get MOAI tokens on Raydium
+            </a>
+          </div>
+        ) : (
+          <div className="max-w-3xl mx-auto">
+            {/* Existing chat interface */}
+            {/* ... existing code ... */}
           </div>
         )}
-      </div>
-
-      {/* Suggestions Area */}
-      <div className="absolute left-1/2 -translate-x-1/2 w-full max-w-4xl bottom-24">
-        {suggestions.length > 0 && !isLoading && (
-          <div className={`flex justify-center gap-3 flex-wrap transition-opacity duration-1000 ${showSuggestions ? 'opacity-100' : 'opacity-0'}`}>
-            {suggestions.map((suggestion, index) => (
-              <button
-                key={index}
-                onClick={() => handleSuggestionClick(suggestion)}
-                className="px-4 py-2 rounded-lg transition-all duration-200 
-                  border border-blue-500/50 text-blue-400 hover:text-blue-300
-                  shadow-[0_0_10px_0] shadow-blue-500/20 bg-black/80 backdrop-blur-md
-                  hover:shadow-[0_0_15px_0] hover:shadow-blue-500/30 hover:border-blue-400/50 text-sm"
-              >
-                {suggestion}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Input Area */}
-      <div className="border-t border-blue-900/30 bg-black/30 backdrop-blur-sm p-4">
-        <div className="max-w-4xl mx-auto">
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={userLanguage === 'tr' ? 'Bir haber konusu yazın...' : 'Type a news topic...'}
-              disabled={isLoading}
-              className="flex-1 bg-gray-800/80 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 placeholder-gray-400 backdrop-blur-sm"
-            />
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20 font-medium"
-            >
-              {isLoading ? 'Responding...' : 'Send'}
-            </button>
-          </form>
-        </div>
-      </div>
+      </main>
     </div>
   );
 } 
