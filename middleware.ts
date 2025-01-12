@@ -4,15 +4,26 @@ import type { NextRequest } from 'next/server';
 export function middleware(request: NextRequest) {
   // Bakım modunu kontrol et
   const maintenanceMode = process.env.NEXT_PUBLIC_MAINTENANCE_MODE;
-  console.log('Maintenance Mode:', maintenanceMode); // Debug için log ekledik
+  console.log('Environment Variables:', {
+    NEXT_PUBLIC_MAINTENANCE_MODE: process.env.NEXT_PUBLIC_MAINTENANCE_MODE,
+    NODE_ENV: process.env.NODE_ENV
+  });
   
-  const isMaintenanceMode = maintenanceMode === '1';
+  const isMaintenanceMode = maintenanceMode === '1' || maintenanceMode === 'true';
   const isMaintenancePage = request.nextUrl.pathname === '/maintenance';
   
   // API rotalarını ve statik dosyaları kontrol et
   const isApiRoute = request.nextUrl.pathname.startsWith('/api');
   const isStaticFile = request.nextUrl.pathname.match(/\.(jpg|jpeg|png|gif|ico|css|js|svg)$/);
   
+  console.log('Middleware Check:', {
+    path: request.nextUrl.pathname,
+    isMaintenanceMode,
+    isMaintenancePage,
+    isApiRoute,
+    isStaticFile
+  });
+
   // API rotaları ve statik dosyalar için middleware'i atla
   if (isApiRoute || isStaticFile) {
     return NextResponse.next();
@@ -20,11 +31,13 @@ export function middleware(request: NextRequest) {
 
   // Bakım modu aktifse ve maintenance sayfasında değilse yönlendir
   if (isMaintenanceMode && !isMaintenancePage) {
+    console.log('Redirecting to maintenance page');
     return NextResponse.redirect(new URL('/maintenance', request.url));
   }
 
   // Bakım modu kapalıysa ve maintenance sayfasındaysa ana sayfaya yönlendir
   if (!isMaintenanceMode && isMaintenancePage) {
+    console.log('Redirecting to home page');
     return NextResponse.redirect(new URL('/', request.url));
   }
 
