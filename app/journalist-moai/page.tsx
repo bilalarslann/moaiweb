@@ -147,7 +147,7 @@ async function translateSearchTerms(searchText: string): Promise<string> {
         content: searchText
       }
     ],
-    model: "gpt-3.5-turbo",
+    model: "gpt-4",
   });
   
   return translation.choices[0]?.message?.content || searchText;
@@ -469,7 +469,7 @@ Return in JSON format:
               content: `Title: ${news.title}\nContent: ${news.content}`
             }
           ],
-          model: "gpt-4-turbo-preview",
+          model: "gpt-4",
           response_format: { type: "json_object" }
         });
 
@@ -555,10 +555,15 @@ Return in JSON format:
         `🗞️ ${searchText.toUpperCase()} hakkında ` :
         `🗞️ Found news about ${searchText.toUpperCase()} `;
 
+      setMessages(prev => [...prev, {
+        type: 'bot',
+        content: searchMessage
+      }]);
+
       // Rest of the search logic using englishSearchTerms
-      const response = await fetch('/api/news');
+      const response = await fetch(`/api/news?q=${encodeURIComponent(englishSearchTerms)}`);
       if (!response.ok) {
-        throw new Error('News API request failed');
+        throw new Error(`News API request failed: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
@@ -661,7 +666,7 @@ Return in JSON format:
                 content: `Title: ${news.title}\nContent: ${news.content}`
               }
             ],
-            model: "gpt-4-turbo-preview",
+            model: "gpt-4",
             response_format: { type: "json_object" }
           });
 
