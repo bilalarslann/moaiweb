@@ -122,7 +122,7 @@ async function translateText(text: string): Promise<string> {
         content: text
       }
     ],
-    model: "gpt-3.5-turbo",
+    model: "gpt-4",
   });
   
   return translation.choices[0]?.message?.content || text;
@@ -140,7 +140,7 @@ async function translateSearchTerms(searchText: string): Promise<string> {
         - "ethereum pectra gelişmeleri" -> "ethereum pectra updates"
         - "bitcoin fiyat analizi" -> "bitcoin price analysis"
         - "solana son durum" -> "solana latest news"
-        `
+        Sadece çeviriyi dön, başka bir şey ekleme.`
       },
       {
         role: "user",
@@ -150,7 +150,7 @@ async function translateSearchTerms(searchText: string): Promise<string> {
     model: "gpt-4",
   });
   
-  return translation.choices[0]?.message?.content || searchText;
+  return translation.choices[0]?.message?.content?.trim() || searchText;
 }
 
 export default function JournalistMoai() {
@@ -339,7 +339,7 @@ export default function JournalistMoai() {
                   content: lastSearchTerm
                 }
               ],
-              model: "gpt-",
+              model: "gpt-4",
               response_format: { type: "json_object" }
             });
 
@@ -451,18 +451,14 @@ export default function JournalistMoai() {
 
 ÖNEMLİ: Her haberi mutlaka Türkçe'ye çevir. Çeviri yapmadan asla geçme.
 
-JSON formatında dön:
-{
-  "title": "çevrilmiş başlık",
-  "content": "çevrilmiş içerik"
-}` :
+Şu formatta cevap ver (başka bir şey ekleme):
+TITLE: çevrilmiş başlık
+CONTENT: çevrilmiş içerik` :
                 `You are a professional translator and crypto news editor. Keep the news in English but summarize if needed. Keep technical terms and cryptocurrency names unchanged.
 
-Return in JSON format:
-{
-  "title": "title",
-  "content": "content"
-}`
+Reply in this format (add nothing else):
+TITLE: title
+CONTENT: content`
             },
             {
               role: "user",
@@ -470,13 +466,19 @@ Return in JSON format:
             }
           ],
           model: "gpt-4",
-          response_format: { type: "json_object" }
         });
 
         try {
-          const translatedText = JSON.parse(translation.choices[0]?.message?.content || "{}");
+          const response = translation.choices[0]?.message?.content || "";
+          const titleMatch = response.match(/TITLE:\s*([\s\S]*?)(?=\nCONTENT:|$)/);
+          const contentMatch = response.match(/CONTENT:\s*([\s\S]*?)$/);
           
-          // Always use translated text for Turkish users, force translation
+          const translatedText = {
+            title: titleMatch?.[1]?.trim() || news.title,
+            content: contentMatch?.[1]?.trim() || news.content
+          };
+          
+          // Rest of the code remains the same
           const finalTitle = userLanguage === 'tr' ? 
             (translatedText.title || await translateText(news.title)) : 
             news.title;
@@ -514,7 +516,7 @@ Return in JSON format:
                 content: `${finalTitle}\n\n${finalContent}`
               }
             ],
-            model: "gpt-3.5-turbo",
+            model: "gpt-4",
           });
 
           const translationIndicator = userLanguage === 'tr' ? '🔄 ' : '';
@@ -648,18 +650,14 @@ Return in JSON format:
 
 ÖNEMLİ: Her haberi mutlaka Türkçe'ye çevir. Çeviri yapmadan asla geçme.
 
-JSON formatında dön:
-{
-  "title": "çevrilmiş başlık",
-  "content": "çevrilmiş içerik"
-}` :
+Şu formatta cevap ver (başka bir şey ekleme):
+TITLE: çevrilmiş başlık
+CONTENT: çevrilmiş içerik` :
                   `You are a professional translator and crypto news editor. Keep the news in English but summarize if needed. Keep technical terms and cryptocurrency names unchanged.
 
-Return in JSON format:
-{
-  "title": "title",
-  "content": "content"
-}`
+Reply in this format (add nothing else):
+TITLE: title
+CONTENT: content`
               },
               {
                 role: "user",
@@ -667,13 +665,19 @@ Return in JSON format:
               }
             ],
             model: "gpt-4",
-            response_format: { type: "json_object" }
           });
 
           try {
-            const translatedText = JSON.parse(translation.choices[0]?.message?.content || "{}");
+            const response = translation.choices[0]?.message?.content || "";
+            const titleMatch = response.match(/TITLE:\s*([\s\S]*?)(?=\nCONTENT:|$)/);
+            const contentMatch = response.match(/CONTENT:\s*([\s\S]*?)$/);
             
-            // Always use translated text for Turkish users, force translation
+            const translatedText = {
+              title: titleMatch?.[1]?.trim() || news.title,
+              content: contentMatch?.[1]?.trim() || news.content
+            };
+            
+            // Rest of the code remains the same
             const finalTitle = userLanguage === 'tr' ? 
               (translatedText.title || await translateText(news.title)) : 
               news.title;
@@ -711,7 +715,7 @@ Return in JSON format:
                   content: `${finalTitle}\n\n${finalContent}`
                 }
               ],
-              model: "gpt-3.5-turbo",
+              model: "gpt-4",
             });
 
             const translationIndicator = userLanguage === 'tr' ? '🔄 ' : '';
