@@ -1,14 +1,14 @@
 [build]
-  command = "npm run build"
+  command = "next build"
   publish = ".next"
-
-[build.environment]
-  NEXT_USE_NETLIFY_EDGE = "true"
-  NODE_VERSION = "18"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["@netlify/functions"]
+
 [[edge_functions]]
-  function = "scrape"
-  path = "/api/scrape" 
+  function = "api/*"
+  path = "/api/*" 
