@@ -658,7 +658,7 @@ const isRequestingCoinAnalysis = (message: string): boolean => {
 };
 
 // Add secure API call function
-const callOpenAI = async (messages: any[], model: string = 'gpt-3.5-turbo') => {
+const callOpenAI = async (messages: any[], model: string = 'gpt-4-turbo-preview') => {
   try {
     const response = await fetch('/api/openai', {
       method: 'POST',
@@ -668,6 +668,8 @@ const callOpenAI = async (messages: any[], model: string = 'gpt-3.5-turbo') => {
       body: JSON.stringify({
         messages,
         model,
+        temperature: 0.7,
+        max_tokens: 1000,
       }),
     });
 

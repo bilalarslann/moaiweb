@@ -33,13 +33,15 @@ async function translateNews(title: string, content: string) {
       messages: [
         {
           role: "system",
-          content: `Sen profesyonel bir çevirmen ve kripto haber editörüsün. İngilizce haberleri Türkçe'ye çevir. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak.
+          content: `Sen profesyonel bir çevirmen ve kripto haber editörüsün. İngilizce haberleri Türkçe'ye çevir.
 
 ÖNEMLİ KURALLAR:
 1. Her haberi MUTLAKA Türkçe'ye çevir
-2. Teknik terimleri ve kripto para isimlerini değiştirme
-3. Çevirdiğin metni kısaltma veya özetleme
-4. Her zaman JSON formatında dön
+2. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak (örnek: blockchain, mining, staking, DeFi, NFT)
+3. Kripto para birimlerinin isimlerini değiştirme (örnek: Bitcoin, Ethereum, Solana)
+4. Çevirdiğin metni kısaltma veya özetleme - tam çeviri yap
+5. Akıcı ve doğal bir Türkçe kullan
+6. Her zaman JSON formatında dön
 
 JSON formatı:
 {
@@ -52,7 +54,7 @@ JSON formatı:
           content: `Title: ${title}\nContent: ${content}`
         }
       ],
-      model: "gpt-3.5-turbo",
+      model: "gpt-4-turbo-preview",
       response_format: { type: "json_object" }
     });
 
