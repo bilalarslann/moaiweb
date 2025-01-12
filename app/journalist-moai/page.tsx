@@ -429,96 +429,83 @@ export default function JournalistMoai() {
     // Process and display more news
     for (const news of nextBatch) {
       try {
-        const finalTitle = news.title;
-        const finalContent = news.content;
+        let processedTitle = news.title;
+        let processedContent = news.content;
 
-        const translation = await openai.chat.completions.create({
-          messages: [
-            {
-              role: "system",
-              content: detectedLanguage === 'tr' ? 
-                `Sen profesyonel bir çevirmen ve kripto haber editörüsün. İngilizce haberleri Türkçe'ye çevir ve özetle. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak.
-
-ÖNEMLİ: Her haberi mutlaka Türkçe'ye çevir. Çeviri yapmadan asla geçme.
+        // Only translate for Turkish users
+        if (userLanguage === 'tr') {
+          try {
+            const translation = await openai.chat.completions.create({
+              messages: [
+                {
+                  role: "system",
+                  content: `Sen profesyonel bir çevirmen ve kripto haber editörüsün. İngilizce haberleri Türkçe'ye çevir ve özetle. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak.
 
 JSON formatında dön:
 {
   "title": "çevrilmiş başlık",
   "content": "çevrilmiş içerik"
-}` :
-                `Keep the news in English. Only summarize if needed. Keep technical terms and cryptocurrency names unchanged.
-
-Return in JSON format:
-{
-  "title": "title",
-  "content": "content"
 }`
+                },
+                {
+                  role: "user",
+                  content: `Title: ${news.title}\nContent: ${news.content}`
+                }
+              ],
+              model: "gpt-3.5-turbo-1106",
+              response_format: { type: "json_object" }
+            });
+
+            const translatedText = JSON.parse(translation.choices[0]?.message?.content || "{}");
+            processedTitle = translatedText.title || await translateText(news.title);
+            processedContent = translatedText.content || await translateText(news.content);
+          } catch (error) {
+            console.error('Translation error:', error);
+            processedTitle = news.title;
+            processedContent = news.content;
+          }
+        }
+
+        const summary = await openai.chat.completions.create({
+          messages: [
+            {
+              role: "system",
+              content: userLanguage === 'tr' ?
+                `Sen hızlı ve net özetler yapan bir haber editörüsün.
+                
+                Kurallar:
+                1. Haberi 2 kısa paragrafta özetle
+                2. İlk paragrafta ana konuyu anlat
+                3. İkinci paragrafta önemli detayları ver
+                4. Kısa ve öz cümleler kullan
+                5. Sadece en önemli bilgilere odaklan` :
+                `You are a news editor who makes quick and clear summaries.
+                
+                Rules:
+                1. Summarize the news in 2 short paragraphs
+                2. First paragraph for the main topic
+                3. Second paragraph for important details
+                4. Use short and concise sentences
+                5. Focus only on the most important information`
             },
             {
               role: "user",
-              content: `Title: ${news.title}\nContent: ${news.content}`
+              content: `${processedTitle}\n\n${processedContent}`
             }
           ],
-          model: "gpt-3.5-turbo-1106",
-          response_format: { type: "json_object" }
+          model: "gpt-3.5-turbo",
         });
-
-        try {
-          const translatedText = JSON.parse(translation.choices[0]?.message?.content || "{}");
-          
-          // Only use translated text for Turkish users
-          const finalTitle = detectedLanguage === 'tr' ? 
-            (translatedText.title || await translateText(news.title)) : 
-            news.title;
-            
-          const finalContent = detectedLanguage === 'tr' ? 
-            (translatedText.content || await translateText(news.content)) : 
-            news.content;
-
-          const summary = await openai.chat.completions.create({
-            messages: [
-              {
-                role: "system",
-                content: detectedLanguage === 'tr' ?
-                  `Sen hızlı ve net özetler yapan bir haber editörüsün.
-                  
-                  Kurallar:
-                  1. Haberi 2 kısa paragrafta özetle
-                  2. İlk paragrafta ana konuyu anlat
-                  3. İkinci paragrafta önemli detayları ver
-                  4. Kısa ve öz cümleler kullan
-                  5. Sadece en önemli bilgilere odaklan` :
-                  `You are a news editor who makes quick and clear summaries.
-                  
-                  Rules:
-                  1. Summarize the news in 2 short paragraphs
-                  2. First paragraph for the main topic
-                  3. Second paragraph for important details
-                  4. Use short and concise sentences
-                  5. Focus only on the most important information`
-              },
-              {
-                role: "user",
-                content: `${finalTitle}\n\n${finalContent}`
-              }
-            ],
-            model: "gpt-3.5-turbo",
-          });
-          
-          setMessages(prev => [...prev, {
-            type: 'bot',
-            content: `${finalTitle}\n\n${summary.choices[0]?.message?.content || finalContent}\n\nKaynak: <a href="${news.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">${news.sourceText}</a>`
-          }]);
-        } catch (error) {
-          console.error('News processing error:', error);
-          // If summary fails, display the original content
-          setMessages(prev => [...prev, {
-            type: 'bot',
-            content: `📰 ${news.title}\n\n${news.content}\n\nKaynak: <a href="${news.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">${news.sourceText}</a>`
-          }]);
-        }
+        
+        setMessages(prev => [...prev, {
+          type: 'bot',
+          content: `📰 ${processedTitle}\n\n${summary.choices[0]?.message?.content || processedContent}\n\nKaynak: <a href="${news.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">${news.sourceText}</a>`
+        }]);
       } catch (error) {
         console.error('News processing error:', error);
+        setMessages(prev => [...prev, {
+          type: 'bot',
+          content: `📰 ${news.title}\n\n${news.content}\n\nKaynak: <a href="${news.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">${news.sourceText}</a>`
+        }]);
       }
     }
     setIsMessageLoading(false);
@@ -555,95 +542,129 @@ Return in JSON format:
 
       setMessages(prev => [...prev, { type: 'user', content: searchText }]);
 
-      // Show language-specific news announcement with display term
+      // Fetch news data
+      const mainResponse = await fetch(`/api/news?q=${encodeURIComponent(searchText)}`);
+      const mainNewsData = await mainResponse.json();
+
+      // Show language-specific news announcement
       setMessages(prev => [...prev, {
         type: 'bot',
         content: currentLanguage === 'tr' ? 
-          `🗞️ ${response.display_terms[0].toUpperCase()} hakkında ${mainNewsData.news_results?.length || 0} haber buldum...` :
-          `🗞️ Found ${mainNewsData.news_results?.length || 0} news about ${response.display_terms[0].toUpperCase()}...`
+          `🗞️ ${searchText.toUpperCase()} hakkında ${mainNewsData.news_results?.length || 0} haber buldum...` :
+          `🗞️ Found ${mainNewsData.news_results?.length || 0} news about ${searchText.toUpperCase()}...`
       }]);
 
-      // Process news with the detected language
-      for (const news of firstBatch) {
-        try {
-          let processedTitle = news.title;
-          let processedContent = news.content;
+      if (mainNewsData.news_results && mainNewsData.news_results.length > 0) {
+        // Process and score news
+        const scoredNews = mainNewsData.news_results
+          .map((article: any) => ({
+            title: article.title,
+            content: article.snippet,
+            description: article.snippet,
+            date: article.date,
+            sourceUrl: article.link,
+            sourceText: article.source,
+            relevanceScore: 1,
+            imageUrl: article.thumbnail
+          }))
+          .sort((a: ScoredArticle, b: ScoredArticle) => b.relevanceScore - a.relevanceScore);
 
-          // Only translate for Turkish queries
-          if (currentLanguage === 'tr') {
-            try {
-              const translation = await openai.chat.completions.create({
-                messages: [
-                  {
-                    role: "system",
-                    content: `Sen profesyonel bir çevirmen ve kripto haber editörüsün. İngilizce haberleri Türkçe'ye çevir ve özetle. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak.
+        // Store all scored news for later use
+        setLastNewsData(scoredNews);
+        setLastNewsIndex(5);
+
+        // Display first 5 news
+        const firstBatch = scoredNews.slice(0, 5);
+
+        // Process each news article with the detected language
+        for (const news of firstBatch) {
+          try {
+            let processedTitle = news.title;
+            let processedContent = news.content;
+
+            // Only translate for Turkish queries
+            if (currentLanguage === 'tr') {
+              try {
+                const translation = await openai.chat.completions.create({
+                  messages: [
+                    {
+                      role: "system",
+                      content: `Sen profesyonel bir çevirmen ve kripto haber editörüsün. İngilizce haberleri Türkçe'ye çevir ve özetle. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak.
 
 JSON formatında dön:
 {
   "title": "çevrilmiş başlık",
   "content": "çevrilmiş içerik"
 }`
-                  },
-                  {
-                    role: "user",
-                    content: `Title: ${news.title}\nContent: ${news.content}`
-                  }
-                ],
-                model: "gpt-3.5-turbo-1106",
-                response_format: { type: "json_object" }
-              });
+                    },
+                    {
+                      role: "user",
+                      content: `Title: ${news.title}\nContent: ${news.content}`
+                    }
+                  ],
+                  model: "gpt-3.5-turbo-1106",
+                  response_format: { type: "json_object" }
+                });
 
-              const translatedText = JSON.parse(translation.choices[0]?.message?.content || "{}");
-              processedTitle = translatedText.title || await translateText(news.title);
-              processedContent = translatedText.content || await translateText(news.content);
-            } catch (error) {
-              console.error('Translation error:', error);
-              processedTitle = news.title;
-              processedContent = news.content;
-            }
-          }
-
-          const summary = await openai.chat.completions.create({
-            messages: [
-              {
-                role: "system",
-                content: currentLanguage === 'tr' ?
-                  `Sen hızlı ve net özetler yapan bir haber editörüsün.
-                  
-                  Kurallar:
-                  1. Haberi 2 kısa paragrafta özetle
-                  2. İlk paragrafta ana konuyu anlat
-                  3. İkinci paragrafta önemli detayları ver
-                  4. Kısa ve öz cümleler kullan
-                  5. Sadece en önemli bilgilere odaklan` :
-                  `You are a news editor who makes quick and clear summaries.
-                  
-                  Rules:
-                  1. Summarize the news in 2 short paragraphs
-                  2. First paragraph for the main topic
-                  3. Second paragraph for important details
-                  4. Use short and concise sentences
-                  5. Focus only on the most important information`
-              },
-              {
-                role: "user",
-                content: `${processedTitle}\n\n${processedContent}`
+                const translatedText = JSON.parse(translation.choices[0]?.message?.content || "{}");
+                processedTitle = translatedText.title || await translateText(news.title);
+                processedContent = translatedText.content || await translateText(news.content);
+              } catch (error) {
+                console.error('Translation error:', error);
+                processedTitle = news.title;
+                processedContent = news.content;
               }
-            ],
-            model: "gpt-3.5-turbo",
-          });
-          
-          setMessages(prev => [...prev, {
-            type: 'bot',
-            content: `📰 ${processedTitle}\n\n${summary.choices[0]?.message?.content || processedContent}\n\nKaynak: <a href="${news.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">${news.sourceText}</a>`
-          }]);
-        } catch (error) {
-          console.error('News processing error:', error);
-          setMessages(prev => [...prev, {
-            type: 'bot',
-            content: `📰 ${news.title}\n\n${news.content}\n\nKaynak: <a href="${news.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">${news.sourceText}</a>`
-          }]);
+            }
+
+            const summary = await openai.chat.completions.create({
+              messages: [
+                {
+                  role: "system",
+                  content: currentLanguage === 'tr' ?
+                    `Sen hızlı ve net özetler yapan bir haber editörüsün.
+                    
+                    Kurallar:
+                    1. Haberi 2 kısa paragrafta özetle
+                    2. İlk paragrafta ana konuyu anlat
+                    3. İkinci paragrafta önemli detayları ver
+                    4. Kısa ve öz cümleler kullan
+                    5. Sadece en önemli bilgilere odaklan` :
+                    `You are a news editor who makes quick and clear summaries.
+                    
+                    Rules:
+                    1. Summarize the news in 2 short paragraphs
+                    2. First paragraph for the main topic
+                    3. Second paragraph for important details
+                    4. Use short and concise sentences
+                    5. Focus only on the most important information`
+                },
+                {
+                  role: "user",
+                  content: `${processedTitle}\n\n${processedContent}`
+                }
+              ],
+              model: "gpt-3.5-turbo",
+            });
+            
+            setMessages(prev => [...prev, {
+              type: 'bot',
+              content: `📰 ${processedTitle}\n\n${summary.choices[0]?.message?.content || processedContent}\n\nKaynak: <a href="${news.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">${news.sourceText}</a>`
+            }]);
+          } catch (error) {
+            console.error('News processing error:', error);
+            setMessages(prev => [...prev, {
+              type: 'bot',
+              content: `📰 ${news.title}\n\n${news.content}\n\nKaynak: <a href="${news.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">${news.sourceText}</a>`
+            }]);
+          }
         }
+      } else {
+        setMessages(prev => [...prev, {
+          type: 'bot',
+          content: currentLanguage === 'tr' ?
+            'Üzgünüm, bu konu hakkında güncel haber bulamadım.' :
+            'Sorry, I could not find any recent news on this topic.'
+        }]);
       }
     } catch (error) {
       console.error('Error:', error);
