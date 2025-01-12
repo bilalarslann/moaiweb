@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { rateLimit } from '@/lib/rate-limit';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -8,20 +7,6 @@ const openai = new OpenAI({
 
 export async function POST(req: Request) {
   try {
-    // Rate limiting
-    const limiter = await rateLimit(req);
-    if (!limiter.success) {
-      return new NextResponse(JSON.stringify({ error: 'Too many requests' }), {
-        status: 429,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-RateLimit-Limit': limiter.limit.toString(),
-          'X-RateLimit-Remaining': limiter.remaining.toString(),
-          'X-RateLimit-Reset': limiter.reset.toString(),
-        },
-      });
-    }
-
     // Validate request body
     const body = await req.json();
     if (!body.messages || !Array.isArray(body.messages)) {
