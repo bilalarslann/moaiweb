@@ -21,6 +21,14 @@ declare global {
   }
 }
 
+// Add CoinSuggestion type
+type CoinSuggestion = {
+  id: string;
+  symbol: string;
+  name: string;
+  thumb: string;
+};
+
 type Message = {
   type: 'user' | 'bot';
   content: string;
@@ -170,14 +178,6 @@ interface SeriesData {
   low: number;
   time: number;
 }
-
-// Add new types for coin suggestions
-type CoinSuggestion = {
-  id: string;
-  symbol: string;
-  name: string;
-  thumb: string;
-};
 
 interface PhantomSolana {
   disconnect(): Promise<void>;
@@ -873,6 +873,86 @@ export default function AnalistMoai() {
       </div>
     );
   }
+
+  // Add function to fetch coin suggestions
+  const fetchCoinSuggestions = async (query: string) => {
+    if (query.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(query)}`);
+      const data = await response.json();
+
+      // Check if there are any coin results before processing
+      if (!data.coins || data.coins.length === 0) {
+        setSuggestions([]);
+        setShowSuggestions(false);
+        return;
+      }
+      
+      // Filter and format suggestions, limit to 3
+      const formattedSuggestions = data.coins
+        .slice(0, 3) // Limit to 3 suggestions
+        .map((coin: any) => ({
+          id: coin.id,
+          symbol: coin.symbol.toUpperCase(),
+          name: coin.name,
+          thumb: coin.thumb
+        }));
+      
+      // Only show suggestions if we have results
+      if (formattedSuggestions.length > 0) {
+        setSuggestions(formattedSuggestions);
+        setShowSuggestions(true);
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  // Add suggestion click handler
+  const handleSuggestionClick = (suggestion: CoinSuggestion) => {
+    setSelectedCoin(suggestion);
+    setInput('');
+    setShowSuggestions(false);
+  };
+
+  // Add clear selection handler
+  const handleClearSelection = () => {
+    setSelectedCoin(null);
+    setInput('');
+  };
+
+  // Modify input change handler
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setInput(value);
+    
+    // Only fetch suggestions if no coin is selected
+    if (!selectedCoin) {
+      // Clear any existing timer
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+
+      // Set new timer for 500ms
+      debounceTimerRef.current = setTimeout(() => {
+        fetchCoinSuggestions(value);
+      }, 500);
+    } else {
+      // Clear any existing suggestions
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
 
   // Rest of the component code...
   // ... existing code ...
