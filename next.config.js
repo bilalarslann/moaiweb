@@ -1,22 +1,19 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  reactStrictMode: true,
+  swcMinify: true,
   images: {
-    domains: [
-      'assets.coingecko.com',
-      'static.coingecko.com',
-      'www.coingecko.com'
-    ],
     unoptimized: true,
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
   },
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      config.externals.push({
-        'puppeteer-core': 'puppeteer-core',
-        '@sparticuz/chromium': '@sparticuz/chromium'
-      });
-    }
-    return config;
-  }
+  experimental: {
+    serverActions: true,
+  },
 }
 
 module.exports = nextConfig
