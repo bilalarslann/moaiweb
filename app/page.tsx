@@ -137,12 +137,6 @@ export default function Home() {
       description: 'Real-time Crypto News Analysis',
       image: '/contents/news-moai.jpg',
       link: '/journalist-moai'
-    },
-    {
-      title: 'Team',
-      description: 'Meet Our Founders',
-      image: '/moai.webp',
-      link: '/team'
     }
   ];
 
@@ -216,6 +210,12 @@ export default function Home() {
                 {isMoreOpen && (
                   <div className="absolute right-0 mt-1 w-48 rounded-md shadow-lg bg-black ring-1 ring-black ring-opacity-5 divide-y divide-gray-700">
                     <div className="py-1">
+                      <Link
+                        href="/team"
+                        className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-900 hover:text-white"
+                      >
+                        Team
+                      </Link>
                       <a
                         href="https://dexscreener.com/solana/2GbE1pq8GiwpHhdGWKUBLXJfBKvKLoNWe1E4KPtbED2M"
                         target="_blank"
@@ -323,6 +323,12 @@ export default function Home() {
 
                 {/* Additional Links */}
                 <div className="flex flex-col space-y-4 mb-6">
+                  <Link
+                    href="/team"
+                    className="text-white hover:text-gray-300 text-base text-center transition-all duration-300"
+                  >
+                    Team
+                  </Link>
                   <a 
                     href="https://dexscreener.com/solana/2GbE1pq8GiwpHhdGWKUBLXJfBKvKLoNWe1E4KPtbED2M" 
                     target="_blank"
