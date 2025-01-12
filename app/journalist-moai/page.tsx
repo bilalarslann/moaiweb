@@ -464,6 +464,10 @@ JSON formatında dön:
             processedTitle = news.title;
             processedContent = news.content;
           }
+        } else {
+          // For English queries, keep original text
+          processedTitle = news.title;
+          processedContent = news.content;
         }
 
         const summary = await openai.chat.completions.create({
@@ -614,6 +618,10 @@ JSON formatında dön:
                 processedTitle = news.title;
                 processedContent = news.content;
               }
+            } else {
+              // For English queries, keep original text
+              processedTitle = news.title;
+              processedContent = news.content;
             }
 
             const summary = await openai.chat.completions.create({
