@@ -434,6 +434,7 @@ Return in JSON format:
 
         const translatedText = JSON.parse(translation.choices[0]?.message?.content || "{}");
         
+        // Always use translated text for Turkish users
         const finalTitle = userLanguage === 'tr' ? translatedText.title : news.title;
         const finalContent = userLanguage === 'tr' ? translatedText.content : news.content;
 
@@ -449,7 +450,8 @@ Return in JSON format:
                 2. İlk paragrafta ana konuyu anlat
                 3. İkinci paragrafta önemli detayları ver
                 4. Kısa ve öz cümleler kullan
-                5. Sadece en önemli bilgilere odaklan` :
+                5. Sadece en önemli bilgilere odaklan
+                6. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak` :
                 `You are a news editor who makes quick and clear summaries.
                 
                 Rules:
@@ -457,7 +459,8 @@ Return in JSON format:
                 2. First paragraph for the main topic
                 3. Second paragraph for important details
                 4. Use short and concise sentences
-                5. Focus only on the most important information`
+                5. Focus only on the most important information
+                6. Keep technical terms and cryptocurrency names unchanged`
             },
             {
               role: "user",
@@ -467,7 +470,7 @@ Return in JSON format:
           model: "gpt-3.5-turbo",
         });
 
-        const translationIndicator = translatedText.isTranslated ? '🔄 ' : '';
+        const translationIndicator = userLanguage === 'tr' ? '🔄 ' : '';
         
         setMessages(prev => [...prev, {
           type: 'bot',
@@ -738,7 +741,8 @@ Return in JSON format:
                           2. İlk paragrafta ana konuyu anlat
                           3. İkinci paragrafta önemli detayları ver
                           4. Kısa ve öz cümleler kullan
-                          5. Sadece en önemli bilgilere odaklan` :
+                          5. Sadece en önemli bilgilere odaklan
+                          6. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak` :
                           `You are a news editor who makes quick and clear summaries.
                           
                           Rules:
@@ -746,7 +750,8 @@ Return in JSON format:
                           2. First paragraph for the main topic
                           3. Second paragraph for important details
                           4. Use short and concise sentences
-                          5. Focus only on the most important information`
+                          5. Focus only on the most important information
+                          6. Keep technical terms and cryptocurrency names unchanged`
                       },
                       {
                         role: "user",
@@ -756,7 +761,7 @@ Return in JSON format:
                     model: "gpt-3.5-turbo",
                   });
 
-                  const translationIndicator = translatedText.isTranslated ? '🔄 ' : '';
+                  const translationIndicator = userLanguage === 'tr' ? '🔄 ' : '';
                   
                   setMessages(prev => [...prev, {
                     type: 'bot',
