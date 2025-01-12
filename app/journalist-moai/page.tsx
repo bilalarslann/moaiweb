@@ -3,6 +3,76 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import OpenAI from 'openai';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+
+const MOAI_TOKEN_ADDRESS = '2GbE1pq8GiwpHhdGWKUBLXJfBKvKLoNWe1E4KPtbED2M';
+const SOLANA_RPC_URL = 'https://solana-mainnet.rpc.extrnode.com/a6f9fc24-29e2-43fb-8f5c-de216933db71';
+
+const handleDisconnect = async (disconnect: () => Promise<void>) => {
+  try {
+    await disconnect();
+    // Clear Phantom's cached connection
+    if (typeof window !== 'undefined') {
+      // Disconnect Phantom specifically
+      if (window.phantom?.solana) {
+        try {
+          await window.phantom.solana.disconnect();
+        } catch (e) {
+          console.error('Error disconnecting Phantom:', e);
+        }
+      }
+      // Also try legacy method
+      if (window.solana) {
+        try {
+          await window.solana.disconnect();
+        } catch (e) {
+          console.error('Error disconnecting legacy:', e);
+        }
+      }
+      
+      // Clear all wallet related data
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Clear specific Phantom items
+      const phantomKeys = [
+        'walletName',
+        'connectedAccount',
+        'selectedAccount',
+        'phantom-recent-account',
+        'phantom.selectedAccount',
+        'phantom.lastAccount',
+        'phantom.wallet.autoConnect',
+        'phantom-is-unlocked',
+        'phantom-encrypted-private-key',
+        'phantom-public-key',
+        'phantom-account-state',
+        'phantom-connection-strategy',
+        'phantom.selectedWallet',
+        'phantom.lastSelectedAccount',
+        'phantom.autoConnect',
+        'phantom.recentWallet',
+        'phantom.recentAccount',
+        'phantom.wallet.lastUsed',
+        'phantom.wallet.lastSelected',
+        'phantom.wallet.accounts',
+        'phantom.wallet.preferences'
+      ];
+      
+      phantomKeys.forEach(key => {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+      });
+    }
+    // Force a page reload after disconnect
+    window.location.reload();
+  } catch (error) {
+    console.error('Error disconnecting wallet:', error);
+  }
+};
 
 type Message = {
   type: 'user' | 'bot';
@@ -14,25 +84,11 @@ const openai = new OpenAI({
   dangerouslyAllowBrowser: true
 });
 
-interface NewsArticle {
-  title: string;
-  snippet: string;
-  link: string;
-  date: string;
-  source: string;
-  thumbnail?: string;
-}
-
-interface ScoredArticle extends NewsArticle {
-  content: string;
-  description: string;
-  sourceUrl: string;
-  sourceText: string;
-  relevanceScore: number;
-  imageUrl?: string;
-}
-
 export default function GazeticiMoai() {
+  const hasCheckedBalance = useRef(false);
+  const { publicKey, connected, disconnect } = useWallet();
+  const [hasToken, setHasToken] = useState(false);
+  const [isWalletLoading, setIsWalletLoading] = useState(true);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -45,10 +101,94 @@ export default function GazeticiMoai() {
   const [userLanguage, setUserLanguage] = useState<'en' | 'tr'>('en');
   const [lastSearchTerm, setLastSearchTerm] = useState<string>('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [lastNewsData, setLastNewsData] = useState<ScoredArticle[]>([]);
+  const [lastNewsData, setLastNewsData] = useState<any[]>([]);
   const [lastNewsIndex, setLastNewsIndex] = useState<number>(0);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [lastMessageTime, setLastMessageTime] = useState<number>(0);
+
+  // Token verification effect
+  useEffect(() => {
+    const checkTokenBalance = async () => {
+      // Skip if we've already checked and the wallet is still connected
+      if (hasCheckedBalance.current && connected) {
+        return;
+      }
+
+      if (!connected || !publicKey) {
+        setHasToken(false);
+        setIsWalletLoading(false);
+        hasCheckedBalance.current = false;
+        return;
+      }
+
+      try {
+        const connection = new Connection(SOLANA_RPC_URL);
+        
+        // Get all token accounts owned by the user
+        const response = await fetch(SOLANA_RPC_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'getTokenAccountsByOwner',
+            params: [
+              publicKey.toString(),
+              {
+                programId: TOKEN_PROGRAM_ID.toString()
+              },
+              {
+                encoding: 'jsonParsed',
+                commitment: 'confirmed'
+              }
+            ]
+          })
+        });
+
+        const data = await response.json();
+        
+        if (data.error) {
+          console.error('RPC error:', data.error);
+          setHasToken(false);
+          setIsWalletLoading(false);
+          return;
+        }
+
+        // Find MOAI token account
+        const moaiAccount = data.result?.value?.find((account: any) => 
+          account.account.data.parsed.info.mint === MOAI_TOKEN_ADDRESS
+        );
+
+        if (!moaiAccount) {
+          setHasToken(false);
+          setIsWalletLoading(false);
+          return;
+        }
+
+        // Get the token amount
+        const tokenAmount = moaiAccount.account.data.parsed.info.tokenAmount;
+        if (tokenAmount && 
+            typeof tokenAmount.amount === 'string' && 
+            typeof tokenAmount.decimals === 'number') {
+          const amount = Number(tokenAmount.amount) / Math.pow(10, tokenAmount.decimals);
+          setHasToken(amount >= 50000); // Minimum 50,000 MOAI tokens required
+        } else {
+          setHasToken(false);
+        }
+        
+        // Mark that we've checked the balance
+        hasCheckedBalance.current = true;
+      } catch (error) {
+        console.error('Error checking token balance:', error);
+        setHasToken(false);
+      }
+      setIsWalletLoading(false);
+    };
+
+    checkTokenBalance();
+  }, [connected, publicKey]);
 
   // Watch for new messages and update lastMessageTime
   useEffect(() => {
@@ -489,8 +629,8 @@ Return in JSON format:
                     imageUrl: article.thumbnail
                   };
                 })
-                .filter((article: ScoredArticle) => article.relevanceScore > 0) // Sadece pozitif skora sahip haberleri göster
-                .sort((a: ScoredArticle, b: ScoredArticle) => b.relevanceScore - a.relevanceScore);
+                .filter((article: any) => article.relevanceScore > 0) // Sadece pozitif skora sahip haberleri göster
+                .sort((a: any, b: any) => b.relevanceScore - a.relevanceScore);
 
               // Store all scored news for later use
               setLastNewsData(scoredNews);
@@ -678,107 +818,185 @@ Return in JSON format:
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-b from-gray-900 to-black">
-      {/* Header */}
-      <header className="w-full p-6 bg-black/30 backdrop-blur-sm border-b border-blue-900/30">
-        <div className="flex items-center gap-4 max-w-4xl mx-auto">
-          <a href="/" className="text-white hover:text-blue-400 transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-            </svg>
-          </a>
-          <div className="relative w-12 h-12 ring-2 ring-blue-500/50 rounded-full overflow-hidden shadow-lg shadow-blue-500/20">
-            <Image
-              src="/moai.webp"
-              alt="MOAI"
-              width={48}
-              height={48}
-              className="rounded-full object-cover hover:scale-110 transition-transform duration-200"
-              priority
-            />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-white">Journalist MOAI</h1>
-            <p className="text-sm text-blue-300/80">Crypto & Blockchain Assistant</p>
+      {/* Render loading state */}
+      {isWalletLoading ? (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-black">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          <p className="text-blue-300 mt-4">Checking wallet...</p>
+        </div>
+      ) : !connected ? (
+        // Render connect wallet state
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-black">
+          <div className="text-center space-y-4">
+            <h1 className="text-2xl font-bold text-white mb-8">Welcome to Journalist MOAI</h1>
+            <p className="text-blue-300 mb-8">Please connect your wallet to access the news</p>
+            <WalletMultiButton className="!bg-blue-600 hover:!bg-blue-700 transition-colors" />
           </div>
         </div>
-      </header>
-
-      {/* Chat Container */}
-      <div 
-        ref={chatContainerRef}
-        className="flex-1 overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full custom-scrollbar [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-800/50 [&::-webkit-scrollbar-thumb]:bg-blue-600/50 hover:[&::-webkit-scrollbar-thumb]:bg-blue-500 [&::-webkit-scrollbar-thumb]:rounded-full"
-      >
-        {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}
-          >
-            <div
-              className={`max-w-[80%] p-4 rounded-2xl ${
-                message.type === 'user'
-                  ? 'bg-blue-600 text-white rounded-br-none shadow-lg shadow-blue-500/20'
-                  : 'bg-gray-800/80 text-white rounded-bl-none shadow-lg shadow-black/20 backdrop-blur-sm'
-              }`}
-              dangerouslySetInnerHTML={{ __html: message.content }}
-            >
+      ) : !hasToken ? (
+        // Render insufficient token state
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-black">
+          <div className="text-center space-y-4">
+            <h1 className="text-2xl font-bold text-white mb-4">Access Required</h1>
+            <p className="text-blue-300 mb-2">You need to hold at least 50,000 MOAI tokens to access this feature</p>
+            <p className="text-blue-400/80 text-sm mb-8">Current holdings are insufficient</p>
+            <div className="flex flex-col gap-3">
+              <a 
+                href="https://raydium.io/swap/?inputMint=So11111111111111111111111111111111111111112&outputMint=2GbE1pq8GiwpHhdGWKUBLXJfBKvKLoNWe1E4KPtbED2M"
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7.848 8.25l1.536.887M7.848 8.25a3 3 0 11-5.196-3 3 3 0 015.196 3zm1.536.887a2.165 2.165 0 011.083 1.839c.005.351.054.695.14 1.024M9.384 9.137l2.077 1.199M7.848 15.75l1.536-.887m-1.536.887a3 3 0 11-5.196 3 3 3 0 015.196-3zm1.536-.887a2.165 2.165 0 001.083-1.838c.005-.352.054-.695.14-1.025m-1.223 2.863l2.077-1.199m0-3.328a4.323 4.323 0 012.068-1.379l5.325-1.628a4.5 4.5 0 012.48-.044l.803.215-7.794 4.5m-2.882-1.664A4.331 4.331 0 0010.607 12m3.736 0l7.794 4.5-.802.215a4.5 4.5 0 01-2.48-.043l-5.326-1.629a4.324 4.324 0 01-2.068-1.379M14.343 12l-2.882 1.664" />
+                </svg>
+                Get MOAI Tokens
+              </a>
+              <button
+                onClick={() => handleDisconnect(disconnect)}
+                className="bg-red-600/20 text-red-300 px-6 py-3 rounded-xl hover:bg-red-600/30 transition-colors flex items-center justify-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                </svg>
+                Disconnect Wallet
+              </button>
             </div>
           </div>
-        ))}
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-gray-800/80 text-white rounded-2xl rounded-bl-none p-4 max-w-[80%] animate-pulse shadow-lg shadow-black/20 backdrop-blur-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+        </div>
+      ) : (
+        // Main chat interface
+        <>
+          {/* Header */}
+          <header className="w-full p-6 bg-black/30 backdrop-blur-sm border-b border-blue-900/30">
+            <div className="flex items-center justify-between max-w-4xl mx-auto">
+              <div className="flex items-center gap-4">
+                <a href="/" className="text-white hover:text-blue-400 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                  </svg>
+                </a>
+                <div className="relative w-12 h-12 ring-2 ring-blue-500/50 rounded-full overflow-hidden shadow-lg shadow-blue-500/20">
+                  <Image
+                    src="/moai.webp"
+                    alt="MOAI"
+                    width={48}
+                    height={48}
+                    className="rounded-full object-cover hover:scale-110 transition-transform duration-200"
+                    priority
+                  />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-white">Journalist MOAI</h1>
+                  <p className="text-sm text-blue-300/80">Crypto & Blockchain Assistant</p>
+                </div>
+              </div>
+              
+              {/* Wallet Connection Controls */}
+              <div className="flex items-center gap-3">
+                {connected ? (
+                  <>
+                    <div className="text-right">
+                      <p className="text-sm text-blue-300/80">Connected Wallet</p>
+                      <p className="text-xs text-blue-400/60 truncate max-w-[150px]">
+                        {publicKey?.toBase58()}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleDisconnect(disconnect)}
+                      className="p-2 rounded-lg bg-red-600/20 text-red-300 hover:bg-red-600/30 transition-colors"
+                      title="Disconnect Wallet"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                      </svg>
+                    </button>
+                  </>
+                ) : (
+                  <WalletMultiButton className="!bg-blue-600 hover:!bg-blue-700 transition-colors" />
+                )}
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          </header>
 
-      {/* Suggestions Area */}
-      <div className="absolute left-1/2 -translate-x-1/2 w-full max-w-4xl bottom-24">
-        {suggestions.length > 0 && !isLoading && (
-          <div className={`flex justify-center gap-3 flex-wrap transition-opacity duration-1000 ${showSuggestions ? 'opacity-100' : 'opacity-0'}`}>
-            {suggestions.map((suggestion, index) => (
-              <button
+          {/* Chat Container */}
+          <div 
+            ref={chatContainerRef}
+            className="flex-1 overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full custom-scrollbar [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-800/50 [&::-webkit-scrollbar-thumb]:bg-blue-600/50 hover:[&::-webkit-scrollbar-thumb]:bg-blue-500 [&::-webkit-scrollbar-thumb]:rounded-full"
+          >
+            {messages.map((message, index) => (
+              <div
                 key={index}
-                onClick={() => handleSuggestionClick(suggestion)}
-                className="px-4 py-2 rounded-lg transition-all duration-200 
-                  border border-blue-500/50 text-blue-400 hover:text-blue-300
-                  shadow-[0_0_10px_0] shadow-blue-500/20 bg-black/80 backdrop-blur-md
-                  hover:shadow-[0_0_15px_0] hover:shadow-blue-500/30 hover:border-blue-400/50 text-sm"
+                className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}
               >
-                {suggestion}
-              </button>
+                <div
+                  className={`max-w-[80%] p-4 rounded-2xl ${
+                    message.type === 'user'
+                      ? 'bg-blue-600 text-white rounded-br-none shadow-lg shadow-blue-500/20'
+                      : 'bg-gray-800/80 text-white rounded-bl-none shadow-lg shadow-black/20 backdrop-blur-sm'
+                  }`}
+                  dangerouslySetInnerHTML={{ __html: message.content }}
+                >
+                </div>
+              </div>
             ))}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="bg-gray-800/80 text-white rounded-2xl rounded-bl-none p-4 max-w-[80%] animate-pulse shadow-lg shadow-black/20 backdrop-blur-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Input Area */}
-      <div className="border-t border-blue-900/30 bg-black/30 backdrop-blur-sm p-4">
-        <div className="max-w-4xl mx-auto">
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={userLanguage === 'tr' ? 'Bir haber konusu yazın...' : 'Type a news topic...'}
-              disabled={isLoading}
-              className="flex-1 bg-gray-800/80 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 placeholder-gray-400 backdrop-blur-sm"
-            />
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20 font-medium"
-            >
-              {isLoading ? 'Responding...' : 'Send'}
-            </button>
-          </form>
-        </div>
-      </div>
+          {/* Suggestions Area */}
+          <div className="absolute left-1/2 -translate-x-1/2 w-full max-w-4xl bottom-24">
+            {suggestions.length > 0 && !isLoading && (
+              <div className={`flex justify-center gap-3 flex-wrap transition-opacity duration-1000 ${showSuggestions ? 'opacity-100' : 'opacity-0'}`}>
+                {suggestions.map((suggestion, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleSuggestionClick(suggestion)}
+                    className="px-4 py-2 rounded-lg transition-all duration-200 
+                      border border-blue-500/50 text-blue-400 hover:text-blue-300
+                      shadow-[0_0_10px_0] shadow-blue-500/20 bg-black/80 backdrop-blur-md
+                      hover:shadow-[0_0_15px_0] hover:shadow-blue-500/30 hover:border-blue-400/50 text-sm"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Input Area */}
+          <div className="border-t border-blue-900/30 bg-black/30 backdrop-blur-sm p-4">
+            <div className="max-w-4xl mx-auto">
+              <form onSubmit={handleSubmit} className="flex gap-2">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder={userLanguage === 'tr' ? 'Bir haber konusu yazın...' : 'Type a news topic...'}
+                  disabled={isLoading}
+                  className="flex-1 bg-gray-800/80 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 placeholder-gray-400 backdrop-blur-sm"
+                />
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20 font-medium"
+                >
+                  {isLoading ? 'Responding...' : 'Send'}
+                </button>
+              </form>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 } 
