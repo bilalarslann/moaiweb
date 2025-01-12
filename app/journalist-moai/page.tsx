@@ -3,6 +3,84 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import OpenAI from 'openai';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+
+// Add TradingView and Phantom types
+declare global {
+  interface Window {
+    phantom?: any;
+    solana?: any;
+  }
+}
+
+const MOAI_TOKEN_ADDRESS = '2GbE1pq8GiwpHhdGWKUBLXJfBKvKLoNWe1E4KPtbED2M';
+const SOLANA_RPC_URL = 'https://solana-mainnet.rpc.extrnode.com/a6f9fc24-29e2-43fb-8f5c-de216933db71';
+
+const handleDisconnect = async (disconnect: () => Promise<void>) => {
+  try {
+    await disconnect();
+    // Clear Phantom's cached connection
+    if (typeof window !== 'undefined') {
+      // Disconnect Phantom specifically
+      if (window.phantom?.solana) {
+        try {
+          await window.phantom.solana.disconnect();
+        } catch (e) {
+          console.error('Error disconnecting Phantom:', e);
+        }
+      }
+      // Also try legacy method
+      if (window.solana) {
+        try {
+          await window.solana.disconnect();
+        } catch (e) {
+          console.error('Error disconnecting legacy:', e);
+        }
+      }
+      
+      // Clear all wallet related data
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Clear specific Phantom items
+      const phantomKeys = [
+        'walletName',
+        'connectedAccount',
+        'selectedAccount',
+        'phantom-recent-account',
+        'phantom.selectedAccount',
+        'phantom.lastAccount',
+        'phantom.wallet.autoConnect',
+        'phantom-is-unlocked',
+        'phantom-encrypted-private-key',
+        'phantom-public-key',
+        'phantom-account-state',
+        'phantom-connection-strategy',
+        'phantom.selectedWallet',
+        'phantom.lastSelectedAccount',
+        'phantom.autoConnect',
+        'phantom.recentWallet',
+        'phantom.recentAccount',
+        'phantom.wallet.lastUsed',
+        'phantom.wallet.lastSelected',
+        'phantom.wallet.accounts',
+        'phantom.wallet.preferences'
+      ];
+      
+      phantomKeys.forEach(key => {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+      });
+    }
+    // Force a page reload after disconnect
+    window.location.reload();
+  } catch (error) {
+    console.error('Error disconnecting wallet:', error);
+  }
+};
 
 type Message = {
   type: 'user' | 'bot';
@@ -32,14 +110,19 @@ interface ScoredArticle extends NewsArticle {
   imageUrl?: string;
 }
 
-export default function GazeticiMoai() {
-  const chatContainerRef = useRef<HTMLDivElement>(null);
+export default function JournalistMoai() {
+  const hasCheckedBalance = useRef(false);
+  const { publicKey, connected, disconnect } = useWallet();
+  const [hasToken, setHasToken] = useState(false);
+  const [isWalletLoading, setIsWalletLoading] = useState(true);
+  const [isMessageLoading, setIsMessageLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       type: 'bot',
-      content: `Hello! I'm JOURNALIST MOAI 🗿\n\nI'm ready to answer your questions about cryptocurrencies, blockchain technology, or any other topic.`
+      content: `Hello! I'm JOURNALIST MOAI 🗿\n\nI can help you find and analyze the latest news in the crypto world. Just ask me about any crypto topic!`
     }
   ]);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [userLanguage, setUserLanguage] = useState<'en' | 'tr'>('en');
@@ -697,6 +780,145 @@ Return in JSON format:
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Add wallet check effect
+  useEffect(() => {
+    const checkTokenBalance = async () => {
+      // Skip if we've already checked and the wallet is still connected
+      if (hasCheckedBalance.current && connected) {
+        return;
+      }
+
+      if (!connected || !publicKey) {
+        setHasToken(false);
+        setIsWalletLoading(false);
+        hasCheckedBalance.current = false;
+        return;
+      }
+
+      try {
+        const connection = new Connection(SOLANA_RPC_URL);
+        
+        // Get all token accounts owned by the user
+        const response = await fetch(SOLANA_RPC_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'getTokenAccountsByOwner',
+            params: [
+              publicKey.toString(),
+              {
+                programId: TOKEN_PROGRAM_ID.toString()
+              },
+              {
+                encoding: 'jsonParsed',
+                commitment: 'confirmed'
+              }
+            ]
+          })
+        });
+
+        const data = await response.json();
+        
+        if (data.error) {
+          console.error('RPC error:', data.error);
+          setHasToken(false);
+          setIsWalletLoading(false);
+          return;
+        }
+
+        // Find MOAI token account
+        const moaiAccount = data.result?.value?.find((account: any) => 
+          account.account.data.parsed.info.mint === MOAI_TOKEN_ADDRESS
+        );
+
+        if (!moaiAccount) {
+          setHasToken(false);
+          setIsWalletLoading(false);
+          return;
+        }
+
+        // Get the token amount
+        const tokenAmount = moaiAccount.account.data.parsed.info.tokenAmount;
+        if (tokenAmount && 
+            typeof tokenAmount.amount === 'string' && 
+            typeof tokenAmount.decimals === 'number') {
+          const amount = Number(tokenAmount.amount) / Math.pow(10, tokenAmount.decimals);
+          setHasToken(amount >= 200000);
+        } else {
+          setHasToken(false);
+        }
+        
+        // Mark that we've checked the balance
+        hasCheckedBalance.current = true;
+      } catch (error) {
+        console.error('Error checking token balance:', error);
+        setHasToken(false);
+      }
+      setIsWalletLoading(false);
+    };
+
+    checkTokenBalance();
+  }, [connected, publicKey]);
+
+  // Render loading state
+  if (isWalletLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-black">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <p className="text-blue-300 mt-4">Checking wallet...</p>
+      </div>
+    );
+  }
+
+  // Render connect wallet state
+  if (!connected) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-black">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-bold text-white mb-8">Welcome to Journalist MOAI</h1>
+          <p className="text-blue-300 mb-8">Please connect your wallet to access the news</p>
+          <WalletMultiButton className="!bg-blue-600 hover:!bg-blue-700 transition-colors" />
+        </div>
+      </div>
+    );
+  }
+
+  // Render insufficient token state
+  if (!hasToken) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-black">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-bold text-white mb-4">Access Required</h1>
+          <p className="text-blue-300 mb-2">You need to hold at least 200,000 MOAI tokens to access this feature</p>
+          <p className="text-blue-400/80 text-sm mb-8">Current holdings are insufficient</p>
+          <div className="flex flex-col gap-3">
+            <a 
+              href="https://raydium.io/swap/?inputCurrency=sol&outputCurrency=2GbE1pq8GiwpHhdGWKUBLXJfBKvKLoNWe1E4KPtbED2M&fixed=in" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors"
+            >
+              Get MOAI Tokens
+            </a>
+            <button
+              onClick={() => handleDisconnect(disconnect)}
+              className="bg-red-600/20 text-red-300 px-6 py-3 rounded-xl hover:bg-red-600/30 transition-colors flex items-center justify-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+              </svg>
+              Disconnect Wallet
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-b from-gray-900 to-black">
