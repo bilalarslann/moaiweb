@@ -1,14 +1,16 @@
-declare global {
-  interface Window {
-    phantom?: {
-      solana?: {
-        disconnect(): Promise<void>;
-      };
-    };
+interface PhantomWindow {
+  phantom?: {
     solana?: {
       disconnect(): Promise<void>;
-    } | undefined;
-  }
+    };
+  };
+  solana?: {
+    disconnect(): Promise<void>;
+  };
+}
+
+declare global {
+  interface Window extends PhantomWindow {}
 }
 
 'use client';
