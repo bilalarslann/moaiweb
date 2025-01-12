@@ -15,6 +15,9 @@ const nextConfig = {
     // Similarly, TypeScript errors won't stop the production build
     ignoreBuildErrors: true,
   },
+  env: {
+    NEXT_PUBLIC_MAINTENANCE_MODE: process.env.NEXT_PUBLIC_MAINTENANCE_MODE || '0'
+  }
 }
 
 module.exports = nextConfig

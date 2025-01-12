@@ -712,7 +712,7 @@ export default function AnalistMoai() {
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Check if site is in maintenance mode
-  const isMaintenance = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === 'true';
+  const isMaintenance = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === '0';
 
   const placeholders = {
     en: [
@@ -868,7 +868,7 @@ export default function AnalistMoai() {
           Analyst MOAI şu anda bakımda. Daha iyi hizmet verebilmek için çalışıyoruz. Lütfen daha sonra tekrar deneyin.
         </p>
         <div className="text-purple-400/60 text-sm">
-          Estimated completion: Soon™
+          Tahmini tamamlanma: Yakında™
         </div>
       </div>
     );
