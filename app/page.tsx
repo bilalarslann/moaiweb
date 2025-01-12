@@ -125,6 +125,27 @@ export default function Home() {
     }
   ];
 
+  const menuItems = [
+    {
+      title: 'Analyst MOAI',
+      description: 'AI-Powered Crypto Market Analysis',
+      image: '/contents/analysis-moai.jpg',
+      link: '/analyst-moai'
+    },
+    {
+      title: 'Journalist MOAI',
+      description: 'Real-time Crypto News Analysis',
+      image: '/contents/news-moai.jpg',
+      link: '/journalist-moai'
+    },
+    {
+      title: 'Team',
+      description: 'Meet Our Founders',
+      image: '/moai.webp',
+      link: '/team'
+    }
+  ];
+
   return (
     <main className="min-h-screen bg-black text-white overflow-x-hidden relative">
       {/* Remove Glow Effects */}
