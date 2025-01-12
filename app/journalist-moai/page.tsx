@@ -1,12 +1,30 @@
+declare global {
+  interface Window {
+    phantom?: {
+      solana?: {
+        disconnect(): Promise<void>;
+      };
+    };
+    solana?: {
+      disconnect(): Promise<void>;
+    } | undefined;
+  }
+}
+
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import OpenAI from 'openai';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 type Message = {
   type: 'user' | 'bot';
   content: string;
+  timestamp?: number;
 };
 
 const openai = new OpenAI({
@@ -32,17 +50,88 @@ interface ScoredArticle extends NewsArticle {
   imageUrl?: string;
 }
 
-export default function GazeticiMoai() {
+const MOAI_TOKEN_ADDRESS = '2GbE1pq8GiwpHhdGWKUBLXJfBKvKLoNWe1E4KPtbED2M';
+const SOLANA_RPC_URL = 'https://solana-mainnet.rpc.extrnode.com/a6f9fc24-29e2-43fb-8f5c-de216933db71';
+
+const handleDisconnect = async (disconnect: () => Promise<void>) => {
+  try {
+    await disconnect();
+    // Clear Phantom's cached connection
+    if (typeof window !== 'undefined') {
+      // Disconnect Phantom specifically
+      if (window.phantom?.solana) {
+        try {
+          await window.phantom.solana.disconnect();
+        } catch (e) {
+          console.error('Error disconnecting Phantom:', e);
+        }
+      }
+      // Also try legacy method
+      if (window.solana) {
+        try {
+          await window.solana.disconnect();
+        } catch (e) {
+          console.error('Error disconnecting legacy:', e);
+        }
+      }
+      
+      // Clear all wallet related data
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Clear specific Phantom items
+      const phantomKeys = [
+        'walletName',
+        'connectedAccount',
+        'selectedAccount',
+        'phantom-recent-account',
+        'phantom.selectedAccount',
+        'phantom.lastAccount',
+        'phantom.wallet.autoConnect',
+        'phantom-is-unlocked',
+        'phantom-encrypted-private-key',
+        'phantom-public-key',
+        'phantom-account-state',
+        'phantom-connection-strategy',
+        'phantom.selectedWallet',
+        'phantom.lastSelectedAccount',
+        'phantom.autoConnect',
+        'phantom.recentWallet',
+        'phantom.recentAccount',
+        'phantom.wallet.lastUsed',
+        'phantom.wallet.lastSelected',
+        'phantom.wallet.accounts',
+        'phantom.wallet.preferences'
+      ];
+      
+      phantomKeys.forEach(key => {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+      });
+    }
+    // Force a page reload after disconnect
+    window.location.reload();
+  } catch (error) {
+    console.error('Error disconnecting wallet:', error);
+  }
+};
+
+export default function JournalistMoai() {
+  const hasCheckedBalance = useRef(false);
+  const { publicKey, connected, disconnect } = useWallet();
+  const [hasToken, setHasToken] = useState(false);
+  const [isWalletLoading, setIsWalletLoading] = useState(true);
+  const [isMessageLoading, setIsMessageLoading] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const [userLanguage, setUserLanguage] = useState<'en' | 'tr'>('en');
   const [messages, setMessages] = useState<Message[]>([
     {
       type: 'bot',
-      content: `Hello! I'm JOURNALIST MOAI 🗿\n\nI'm ready to answer your questions about cryptocurrencies, blockchain technology, or any other topic.`
+      content: `Hello! I'm JOURNALIST MOAI 🗿\n\nI'm ready to answer your questions about cryptocurrencies, blockchain technology, or any other topic.`,
+      timestamp: Date.now()
     }
   ]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [userLanguage, setUserLanguage] = useState<'en' | 'tr'>('en');
   const [lastSearchTerm, setLastSearchTerm] = useState<string>('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [lastNewsData, setLastNewsData] = useState<ScoredArticle[]>([]);
@@ -50,16 +139,100 @@ export default function GazeticiMoai() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [lastMessageTime, setLastMessageTime] = useState<number>(0);
 
+  // Token verification effect
+  useEffect(() => {
+    const checkTokenBalance = async () => {
+      // Skip if we've already checked and the wallet is still connected
+      if (hasCheckedBalance.current && connected) {
+        return;
+      }
+
+      if (!connected || !publicKey) {
+        setHasToken(false);
+        setIsWalletLoading(false);
+        hasCheckedBalance.current = false;
+        return;
+      }
+
+      try {
+        const connection = new Connection(SOLANA_RPC_URL);
+        
+        // Get all token accounts owned by the user
+        const response = await fetch(SOLANA_RPC_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'getTokenAccountsByOwner',
+            params: [
+              publicKey.toString(),
+              {
+                programId: TOKEN_PROGRAM_ID.toString()
+              },
+              {
+                encoding: 'jsonParsed',
+                commitment: 'confirmed'
+              }
+            ]
+          })
+        });
+
+        const data = await response.json();
+        
+        if (data.error) {
+          console.error('RPC error:', data.error);
+          setHasToken(false);
+          setIsWalletLoading(false);
+          return;
+        }
+
+        // Find MOAI token account
+        const moaiAccount = data.result?.value?.find((account: any) => 
+          account.account.data.parsed.info.mint === MOAI_TOKEN_ADDRESS
+        );
+
+        if (!moaiAccount) {
+          setHasToken(false);
+          setIsWalletLoading(false);
+          return;
+        }
+
+        // Get the token amount
+        const tokenAmount = moaiAccount.account.data.parsed.info.tokenAmount;
+        if (tokenAmount && 
+            typeof tokenAmount.amount === 'string' && 
+            typeof tokenAmount.decimals === 'number') {
+          const amount = Number(tokenAmount.amount) / Math.pow(10, tokenAmount.decimals);
+          setHasToken(amount >= 100000);
+        } else {
+          setHasToken(false);
+        }
+        
+        // Mark that we've checked the balance
+        hasCheckedBalance.current = true;
+      } catch (error) {
+        console.error('Error checking token balance:', error);
+        setHasToken(false);
+      }
+      setIsWalletLoading(false);
+    };
+
+    checkTokenBalance();
+  }, [connected, publicKey]);
+
   // Watch for new messages and update lastMessageTime
   useEffect(() => {
-    if (messages.length > 0 && !isLoading) {
+    if (messages.length > 0 && !isMessageLoading) {
       setLastMessageTime(Date.now());
     }
-  }, [messages, isLoading]);
+  }, [messages, isMessageLoading]);
 
   // Show suggestions 3 seconds after the last message
   useEffect(() => {
-    if (lastMessageTime > 0 && !isLoading) {
+    if (lastMessageTime > 0 && !isMessageLoading) {
       const timer = setTimeout(async () => {
         // If we have a lastSearchTerm, generate related suggestions
         if (lastSearchTerm) {
@@ -177,15 +350,11 @@ export default function GazeticiMoai() {
 
       return () => clearTimeout(timer);
     }
-  }, [lastMessageTime, isLoading, lastSearchTerm, userLanguage]);
+  }, [lastMessageTime, isMessageLoading, lastSearchTerm, userLanguage]);
 
   // When component mounts, show initial suggestions
   useEffect(() => {
-    const initialSuggestions = userLanguage === 'tr' ? [
-      'AI Ajanlar hakkında haberler',
-      'Ethereum güncel gelişmeleri',
-      'Bitcoin ve kripto regülasyonları'
-    ] : [
+    const initialSuggestions = [
       'AI Agents news',
       'Latest Ethereum developments',
       'Bitcoin and crypto regulations'
@@ -214,7 +383,6 @@ export default function GazeticiMoai() {
       showMoreNews();
     } else {
       // Directly send the suggestion as a message
-      setIsLoading(true);
       handleSubmit(new Event('submit') as any, suggestion);
     }
   };
@@ -230,7 +398,7 @@ export default function GazeticiMoai() {
       return;
     }
 
-    setIsLoading(true);
+    setIsMessageLoading(true);
     const nextBatch = lastNewsData.slice(lastNewsIndex, lastNewsIndex + 5);
     setLastNewsIndex(prev => prev + 5);
 
@@ -243,6 +411,8 @@ export default function GazeticiMoai() {
               role: "system",
               content: userLanguage === 'tr' ? 
                 `Sen profesyonel bir çevirmen ve kripto haber editörüsün. İngilizce haberleri Türkçe'ye çevir ve özetle. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak.
+
+ÖNEMLİ: Her haberi mutlaka Türkçe'ye çevir.
 
 JSON formatında dön:
 {
@@ -270,8 +440,8 @@ Return in JSON format:
 
         const translatedText = JSON.parse(translation.choices[0]?.message?.content || "{}");
         
-        const finalTitle = translatedText.isTranslated ? translatedText.title : news.title;
-        const finalContent = translatedText.isTranslated ? translatedText.content : news.content;
+        const finalTitle = userLanguage === 'tr' ? translatedText.title : news.title;
+        const finalContent = userLanguage === 'tr' ? translatedText.content : news.content;
 
         const summary = await openai.chat.completions.create({
           messages: [
@@ -313,16 +483,16 @@ Return in JSON format:
         console.error('News processing error:', error);
       }
     }
-    setIsLoading(false);
+    setIsMessageLoading(false);
   };
 
   const handleSubmit = async (e: React.FormEvent, directMessage?: string) => {
     e.preventDefault();
-    if ((!input.trim() && !directMessage) || isLoading) return;
+    if ((!input.trim() && !directMessage) || isMessageLoading) return;
 
     const userMessage = directMessage || input;
     setInput('');
-    setIsLoading(true);
+    setIsMessageLoading(true);
 
     setMessages(prev => [...prev, { type: 'user', content: userMessage }]);
 
@@ -340,7 +510,7 @@ Return in JSON format:
             'Lütfen yukarıdaki önerilerden birini seçin veya yeni bir arama yapın.' :
             'Please select one of the suggestions above or make a new search.'
         }]);
-        setIsLoading(false);
+        setIsMessageLoading(false);
         return;
       }
 
@@ -531,6 +701,8 @@ Return in JSON format:
                         content: userLanguage === 'tr' ? 
                           `Sen profesyonel bir çevirmen ve kripto haber editörüsün. İngilizce haberleri Türkçe'ye çevir ve özetle. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak.
 
+ÖNEMLİ: Her haberi mutlaka Türkçe'ye çevir.
+
 JSON formatında dön:
 {
   "title": "çevrilmiş başlık",
@@ -557,8 +729,8 @@ Return in JSON format:
 
                   const translatedText = JSON.parse(translation.choices[0]?.message?.content || "{}");
                   
-                  const finalTitle = translatedText.isTranslated ? translatedText.title : news.title;
-                  const finalContent = translatedText.isTranslated ? translatedText.content : news.content;
+                  const finalTitle = userLanguage === 'tr' ? translatedText.title : news.title;
+                  const finalContent = userLanguage === 'tr' ? translatedText.content : news.content;
 
                   const summary = await openai.chat.completions.create({
                     messages: [
@@ -600,7 +772,7 @@ Return in JSON format:
                   console.error('News processing error:', error);
                 }
               }
-              setIsLoading(false);
+              setIsMessageLoading(false);
             } else {
               setMessages(prev => [...prev, {
                 type: 'bot',
@@ -608,7 +780,7 @@ Return in JSON format:
                   'Üzgünüm, bu konu hakkında güncel haber bulamadım.' :
                   'Sorry, I could not find any recent news on this topic.'
               }]);
-              setIsLoading(false);
+              setIsMessageLoading(false);
             }
           } catch (error) {
             console.error('Error fetching news:', error);
@@ -688,7 +860,7 @@ Return in JSON format:
       }]);
     }
 
-    setIsLoading(false);
+    setIsMessageLoading(false);
   };
 
   // Auto scroll to bottom when new messages arrive
@@ -698,29 +870,115 @@ Return in JSON format:
     }
   }, [messages]);
 
+  // Render loading state
+  if (isWalletLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-black">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <p className="text-blue-300 mt-4">Checking wallet...</p>
+      </div>
+    );
+  }
+
+  // Render connect wallet state
+  if (!connected) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-black">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-bold text-white mb-8">Welcome to Journalist MOAI</h1>
+          <p className="text-blue-300 mb-8">Please connect your wallet to access the news</p>
+          <div className="relative z-[100] pointer-events-auto">
+            <WalletMultiButton className="!bg-blue-600 hover:!bg-blue-700 transition-colors !cursor-pointer pointer-events-auto" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Render insufficient token state
+  if (!hasToken) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-black">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-bold text-white mb-4">Access Required</h1>
+          <p className="text-blue-300 mb-2">You need to hold at least 100,000 MOAI tokens to access this feature</p>
+          <p className="text-blue-400/80 text-sm mb-8">Current holdings are insufficient</p>
+          <div className="flex flex-col gap-3">
+            <a 
+              href="YOUR_TOKEN_PURCHASE_LINK" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors"
+            >
+              Get MOAI Tokens
+            </a>
+            <button
+              onClick={() => handleDisconnect(disconnect)}
+              className="bg-red-600/20 text-red-300 px-6 py-3 rounded-xl hover:bg-red-600/30 transition-colors flex items-center justify-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+              </svg>
+              Disconnect Wallet
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Update header to include wallet connection controls
   return (
     <div className="flex flex-col h-screen bg-gradient-to-b from-gray-900 to-black">
       {/* Header */}
       <header className="w-full p-6 bg-black/30 backdrop-blur-sm border-b border-blue-900/30">
-        <div className="flex items-center gap-4 max-w-4xl mx-auto">
-          <a href="/" className="text-white hover:text-blue-400 transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-            </svg>
-          </a>
-          <div className="relative w-12 h-12 ring-2 ring-blue-500/50 rounded-full overflow-hidden shadow-lg shadow-blue-500/20">
-            <Image
-              src="/moai.webp"
-              alt="MOAI"
-              width={48}
-              height={48}
-              className="rounded-full object-cover hover:scale-110 transition-transform duration-200"
-              priority
-            />
+        <div className="flex items-center justify-between max-w-4xl mx-auto">
+          <div className="flex items-center gap-4">
+            <a href="/" className="text-white hover:text-blue-400 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+              </svg>
+            </a>
+            <div className="relative w-12 h-12 ring-2 ring-blue-500/50 rounded-full overflow-hidden shadow-lg shadow-blue-500/20">
+              <Image
+                src="/moai.webp"
+                alt="MOAI"
+                width={48}
+                height={48}
+                className="object-cover"
+              />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-white">Journalist MOAI</h1>
+              <p className="text-sm text-blue-300/80">Crypto News Assistant</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-white">Journalist MOAI</h1>
-            <p className="text-sm text-blue-300/80">Crypto & Blockchain Assistant</p>
+          
+          {/* Wallet Connection Controls */}
+          <div className="flex items-center gap-3">
+            {connected ? (
+              <>
+                <div className="text-right">
+                  <p className="text-sm text-blue-300/80">Connected Wallet</p>
+                  <p className="text-xs text-blue-400/60 truncate max-w-[150px]">
+                    {publicKey?.toBase58()}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleDisconnect(disconnect)}
+                  className="p-2 rounded-lg bg-red-600/20 text-red-300 hover:bg-red-600/30 transition-colors"
+                  title="Disconnect Wallet"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                  </svg>
+                </button>
+              </>
+            ) : (
+              <div className="relative z-[100] pointer-events-auto">
+                <WalletMultiButton className="!bg-blue-600 hover:!bg-blue-700 transition-colors !cursor-pointer pointer-events-auto" />
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -728,7 +986,7 @@ Return in JSON format:
       {/* Chat Container */}
       <div 
         ref={chatContainerRef}
-        className="flex-1 overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full custom-scrollbar [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-800/50 [&::-webkit-scrollbar-thumb]:bg-blue-600/50 hover:[&::-webkit-scrollbar-thumb]:bg-blue-500 [&::-webkit-scrollbar-thumb]:rounded-full"
+        className="flex-1 overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-800/50 [&::-webkit-scrollbar-thumb]:bg-blue-600/50 hover:[&::-webkit-scrollbar-thumb]:bg-blue-500 [&::-webkit-scrollbar-thumb]:rounded-full"
       >
         {messages.map((message, index) => (
           <div
@@ -746,7 +1004,7 @@ Return in JSON format:
             </div>
           </div>
         ))}
-        {isLoading && (
+        {isMessageLoading && (
           <div className="flex justify-start">
             <div className="bg-gray-800/80 text-white rounded-2xl rounded-bl-none p-4 max-w-[80%] animate-pulse shadow-lg shadow-black/20 backdrop-blur-sm">
               <div className="flex items-center gap-2">
@@ -761,7 +1019,7 @@ Return in JSON format:
 
       {/* Suggestions Area */}
       <div className="absolute left-1/2 -translate-x-1/2 w-full max-w-4xl bottom-24">
-        {suggestions.length > 0 && !isLoading && (
+        {suggestions.length > 0 && !isMessageLoading && (
           <div className={`flex justify-center gap-3 flex-wrap transition-opacity duration-1000 ${showSuggestions ? 'opacity-100' : 'opacity-0'}`}>
             {suggestions.map((suggestion, index) => (
               <button
@@ -788,15 +1046,15 @@ Return in JSON format:
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={userLanguage === 'tr' ? 'Bir haber konusu yazın...' : 'Type a news topic...'}
-              disabled={isLoading}
+              disabled={isMessageLoading}
               className="flex-1 bg-gray-800/80 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 placeholder-gray-400 backdrop-blur-sm"
             />
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isMessageLoading}
               className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20 font-medium"
             >
-              {isLoading ? 'Responding...' : 'Send'}
+              {isMessageLoading ? 'Responding...' : 'Send'}
             </button>
           </form>
         </div>

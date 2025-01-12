@@ -6,10 +6,16 @@ const nextConfig = {
       'static.coingecko.com',
       'www.coingecko.com'
     ],
+    unoptimized: true,
   },
-  experimental: {
-    // Server Actions are enabled by default in Next.js 14
-    // serverActions: true
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals.push({
+        'puppeteer-core': 'puppeteer-core',
+        '@sparticuz/chromium': '@sparticuz/chromium'
+      });
+    }
+    return config;
   }
 }
 
