@@ -11,7 +11,7 @@ const founders = [
     image: '/moai.webp'
   },
   {
-    name: 'A. BİLAL ARSLAN',
+    name: 'BİLAL ARSLAN',
     role: 'Co-Founder',
     image: '/moai.webp'
   }

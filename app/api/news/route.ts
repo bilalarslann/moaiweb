@@ -73,27 +73,30 @@ JSON formatı:
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');
+  const language = searchParams.get('lang') || 'en'; // Default to English if not specified
 
   if (!query) {
     return NextResponse.json({ error: 'Query parameter is required' }, { status: 400 });
   }
 
   try {
-    const feed = await parser.parseURL(
-      `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`
-    );
+    // Use language-specific Google News RSS feed
+    const feedUrl = language === 'tr' 
+      ? `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=tr&gl=TR&ceid=TR:tr`
+      : `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+
+    const feed = await parser.parseURL(feedUrl);
 
     const news_results = await Promise.all(feed.items.map(async item => {
-      // First translate the title and content
-      const translated = await translateNews(
-        item.title || '',
-        item.contentSnippet || ''
-      );
+      // Only translate if the target language is Turkish
+      const newsContent = language === 'tr' 
+        ? await translateNews(item.title || '', item.contentSnippet || '')
+        : { title: item.title, content: item.contentSnippet };
 
       return {
-        title: translated.title,
+        title: newsContent.title,
         link: item.link,
-        snippet: translated.content,
+        snippet: newsContent.content,
         date: item.pubDate || new Date().toISOString(),
         source: item.source || item.creator || '',
         thumbnail: item.media ? item.media.$.url : null
