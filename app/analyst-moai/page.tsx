@@ -9,7 +9,17 @@ import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { AccountLayout } from '@solana/spl-token';
-import '@phantom/solana';
+
+// Add TradingView and Phantom types
+declare global {
+  interface Window {
+    TradingView: {
+      widget: new (config: any) => any;
+    };
+    phantom?: any;
+    solana?: any;
+  }
+}
 
 type Message = {
   type: 'user' | 'bot';
@@ -97,14 +107,6 @@ const getFormattedSymbol = async (symbol: string): Promise<string> => {
     return `${symbol.toUpperCase()}USDT`;
   }
 };
-
-// TradingView types
-declare global {
-  interface Window {
-    phantom?: any;
-    solana?: any;
-  }
-}
 
 interface ChartData {
   price: number | null;
