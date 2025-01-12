@@ -39,11 +39,6 @@ type ChatMessage = {
   content: string;
 };
 
-const openai = new OpenAI({
-  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true
-});
-
 // TradingView sembol önbellek sistemi
 let symbolCache: Map<string, string> = new Map();
 let lastCacheTime: number = 0;
@@ -662,6 +657,32 @@ const isRequestingCoinAnalysis = (message: string): boolean => {
   );
 };
 
+// Add secure API call function
+const callOpenAI = async (messages: any[], model: string = 'gpt-3.5-turbo') => {
+  try {
+    const response = await fetch('/api/openai', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages,
+        model,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'API call failed');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('OpenAI API Error:', error);
+    throw error;
+  }
+};
+
 export default function AnalistMoai() {
   const hasCheckedBalance = useRef(false);
   const { publicKey, connected, disconnect } = useWallet();
@@ -918,20 +939,17 @@ export default function AnalistMoai() {
     setIsMessageLoading(true);
 
     try {
-      // First, detect the language
-      const languageDetection = await openai.chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content: `You are a language detector. Analyze the given text and return ONLY "tr" for Turkish or "en" for English in your response. Nothing else.`
-          },
-          {
-            role: "user",
-            content: userInput
-          }
-        ],
-        model: "gpt-3.5-turbo",
-      });
+      // Language detection
+      const languageDetection = await callOpenAI([
+        {
+          role: "system",
+          content: `You are a language detector. Analyze the given text and return ONLY "tr" for Turkish or "en" for English in your response. Nothing else.`
+        },
+        {
+          role: "user",
+          content: userInput
+        }
+      ]);
 
       const detectedLanguage = languageDetection.choices[0]?.message?.content?.trim().toLowerCase() as 'en' | 'tr';
       setUserLanguage(detectedLanguage);
@@ -1033,98 +1051,92 @@ export default function AnalistMoai() {
       }
 
       // Analyze the user's input to determine the type of analysis needed
-      const analysisType = await openai.chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content: detectedLanguage === 'tr' ? 
-              `Sen bir kripto analisti asistanısın. Kullanıcının sorusunu analiz et ve hangi tür analiz istediğini belirle.
-              
-              Soru tipleri:
-              1. Genel Analiz: "analiz et", "nasıl", "ne düşünüyorsun" gibi genel sorular
-              2. Fiyat Tahmini: "hedef", "ne kadar olur", "yükselir mi" gibi fiyat odaklı sorular
-              3. Teknik Analiz: "teknik", "göstergeler", "indikatör" gibi teknik analiz odaklı sorular
-              4. Piyasa Analizi: "piyasa", "market", "trend" gibi genel piyasa durumu odaklı sorular
-              
-              Sadece aşağıdaki formatlardan birini döndür:
-              - GENEL_ANALIZ
-              - FIYAT_TAHMINI
-              - TEKNIK_ANALIZ
-              - PIYASA_ANALIZI` :
-              `You are a crypto analyst assistant. Analyze the user's question and determine what type of analysis is needed.
-              
-              Question types:
-              1. General Analysis: general questions like "analyze", "how is", "what do you think"
-              2. Price Prediction: price-focused questions like "target", "how much", "will it rise"
-              3. Technical Analysis: technical analysis focused questions like "technical", "indicators"
-              4. Market Analysis: market condition focused questions like "market", "trend"
-              
-              Return only one of the following formats:
-              - GENERAL_ANALYSIS
-              - PRICE_PREDICTION
-              - TECHNICAL_ANALYSIS
-              - MARKET_ANALYSIS`
-          },
-          {
-            role: "user",
-            content: userInput
-          }
-        ],
-        model: "gpt-3.5-turbo",
-      });
+      const analysisType = await callOpenAI([
+        {
+          role: "system",
+          content: detectedLanguage === 'tr' ? 
+            `Sen bir kripto analisti asistanısın. Kullanıcının sorusunu analiz et ve hangi tür analiz istediğini belirle.
+            
+            Soru tipleri:
+            1. Genel Analiz: "analiz et", "nasıl", "ne düşünüyorsun" gibi genel sorular
+            2. Fiyat Tahmini: "hedef", "ne kadar olur", "yükselir mi" gibi fiyat odaklı sorular
+            3. Teknik Analiz: "teknik", "göstergeler", "indikatör" gibi teknik analiz odaklı sorular
+            4. Piyasa Analizi: "piyasa", "market", "trend" gibi genel piyasa durumu odaklı sorular
+            
+            Sadece aşağıdaki formatlardan birini döndür:
+            - GENEL_ANALIZ
+            - FIYAT_TAHMINI
+            - TEKNIK_ANALIZ
+            - PIYASA_ANALIZI` :
+            `You are a crypto analyst assistant. Analyze the user's question and determine what type of analysis is needed.
+            
+            Question types:
+            1. General Analysis: general questions like "analyze", "how is", "what do you think"
+            2. Price Prediction: price-focused questions like "target", "how much", "will it rise"
+            3. Technical Analysis: technical analysis focused questions like "technical", "indicators"
+            4. Market Analysis: market condition focused questions like "market", "trend"
+            
+            Return only one of the following formats:
+            - GENERAL_ANALYSIS
+            - PRICE_PREDICTION
+            - TECHNICAL_ANALYSIS
+            - MARKET_ANALYSIS`
+        },
+        {
+          role: "user",
+          content: userInput
+        }
+      ]);
 
       const analysisTypeResult = analysisType.choices[0]?.message?.content?.trim() || "GENERAL_ANALYSIS";
 
       // Send the analysis
-      const completion = await openai.chat.completions.create({
-        messages: [
-          {
-            role: 'system',
-            content: detectedLanguage === 'tr' ? 
-              `Sen MOAI'sin - kripto piyasalarının en zeki teknik analisti. Analizini TAM OLARAK 3 PARAGRAFTA yap:
+      const completion = await callOpenAI([
+        {
+          role: 'system',
+          content: detectedLanguage === 'tr' ? 
+            `Sen MOAI'sin - kripto piyasalarının en zeki teknik analisti. Analizini TAM OLARAK 3 PARAGRAFTA yap:
 
-              1. PARAGRAF: Fiyat hareketleri ve önemli destek/direnç seviyeleri analizi. Hacim profiline göre belirlenen en önemli destek ve direnç seviyelerini detaylı açıkla. Hangi seviyelerin güçlü olduğunu ve neden önemli olduklarını belirt. Fiyatın bu seviyelere göre konumunu değerlendir.
+            1. PARAGRAF: Fiyat hareketleri ve önemli destek/direnç seviyeleri analizi. Hacim profiline göre belirlenen en önemli destek ve direnç seviyelerini detaylı açıkla. Hangi seviyelerin güçlü olduğunu ve neden önemli olduklarını belirt. Fiyatın bu seviyelere göre konumunu değerlendir.
 
-              2. PARAGRAF: Teknik göstergeleri analiz et (RSI, MACD, BB, SMA'lar). Trend analizi yap ve hacim analizini değerlendir. Farklı periyotlardaki (20, 50, 200) hareketli ortalamaların konumlarını ve ne anlama geldiklerini açıkla.
+            2. PARAGRAF: Teknik göstergeleri analiz et (RSI, MACD, BB, SMA'lar). Trend analizi yap ve hacim analizini değerlendir. Farklı periyotlardaki (20, 50, 200) hareketli ortalamaların konumlarını ve ne anlama geldiklerini açıkla.
 
-              3. PARAGRAF: Kullanıcının spesifik sorusunu cevapla. Eğer fiyat tahmini isteniyorsa, destek/direnç seviyeleri ve teknik göstergelere dayalı tahmin yap. Kısa ve orta vadeli hedefleri belirt.
+            3. PARAGRAF: Kullanıcının spesifik sorusunu cevapla. Eğer fiyat tahmini isteniyorsa, destek/direnç seviyeleri ve teknik göstergelere dayalı tahmin yap. Kısa ve orta vadeli hedefleri belirt.
 
-              ÖNEMLİ KURALLAR:
-              - Kesinlikle 3 paragraftan fazla yazma
-              - Her paragraf en fazla 4-5 cümle olsun
-              - Tüm sayısal değerleri **kalın** yaz
-              - Teknik terimleri doğal bir dilde açıkla
-              - Başlık veya liste kullanma, düz metin yaz
-              - Destek/direnç seviyelerini mutlaka belirt
+            ÖNEMLİ KURALLAR:
+            - Kesinlikle 3 paragraftan fazla yazma
+            - Her paragraf en fazla 4-5 cümle olsun
+            - Tüm sayısal değerleri **kalın** yaz
+            - Teknik terimleri doğal bir dilde açıkla
+            - Başlık veya liste kullanma, düz metin yaz
+            - Destek/direnç seviyelerini mutlaka belirt
 
-              Not: Bu analiz eğitim amaçlıdır.` :
-              `You are MOAI - the smartest technical analyst in crypto markets. Present your analysis in EXACTLY 3 PARAGRAPHS:
+            Not: Bu analiz eğitim amaçlıdır.` :
+            `You are MOAI - the smartest technical analyst in crypto markets. Present your analysis in EXACTLY 3 PARAGRAPHS:
 
-              1ST PARAGRAPH: Price action and critical support/resistance levels analysis. Explain in detail the most important support and resistance levels determined by volume profile. Indicate which levels are strong and why they are important. Evaluate price position relative to these levels.
+            1ST PARAGRAPH: Price action and critical support/resistance levels analysis. Explain in detail the most important support and resistance levels determined by volume profile. Indicate which levels are strong and why they are important. Evaluate price position relative to these levels.
 
-              2ND PARAGRAPH: Analyze technical indicators (RSI, MACD, BB, SMAs). Perform trend analysis and evaluate volume analysis. Explain the positions of different period moving averages (20, 50, 200) and what they mean.
+            2ND PARAGRAPH: Analyze technical indicators (RSI, MACD, BB, SMAs). Perform trend analysis and evaluate volume analysis. Explain the positions of different period moving averages (20, 50, 200) and what they mean.
 
-              3RD PARAGRAPH: Answer the user's specific question. If price prediction is requested, make a forecast based on support/resistance levels and technical indicators. Specify short and medium-term targets.
+            3RD PARAGRAPH: Answer the user's specific question. If price prediction is requested, make a forecast based on support/resistance levels and technical indicators. Specify short and medium-term targets.
 
-              IMPORTANT RULES:
-              - Never write more than 3 paragraphs
-              - Each paragraph should be 4-5 sentences maximum
-              - Write all numerical values in **bold**
-              - Explain technical terms conversationally
-              - No headers or lists, just plain text
-              - Always mention support/resistance levels
+            IMPORTANT RULES:
+            - Never write more than 3 paragraphs
+            - Each paragraph should be 4-5 sentences maximum
+            - Write all numerical values in **bold**
+            - Explain technical terms conversationally
+            - No headers or lists, just plain text
+            - Always mention support/resistance levels
 
-              Note: This analysis is for educational purposes only.`
-          },
-          ...conversationHistory,
-          {
-            role: 'user',
-            content: `Analyze ${coinSymbol} with the following data: ${JSON.stringify(chartData)}
-            User's specific question: ${userInput || 'general analysis'}`
-          }
-        ],
-        model: "gpt-4-turbo-preview",
-      });
+            Note: This analysis is for educational purposes only.`
+        },
+        ...conversationHistory,
+        {
+          role: 'user',
+          content: `Analyze ${coinSymbol} with the following data: ${JSON.stringify(chartData)}
+          User's specific question: ${userInput || 'general analysis'}`
+        }
+      ]);
 
       const botResponse = completion.choices[0]?.message?.content || 
         (detectedLanguage === 'tr' ? "Üzgünüm, analiz yaparken bir hata oluştu." : "Sorry, an error occurred during analysis.");
