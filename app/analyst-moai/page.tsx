@@ -9,6 +9,7 @@ import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { AccountLayout } from '@solana/spl-token';
+import '@phantom/solana';
 
 type Message = {
   type: 'user' | 'bot';
@@ -100,9 +101,8 @@ const getFormattedSymbol = async (symbol: string): Promise<string> => {
 // TradingView types
 declare global {
   interface Window {
-    TradingView: {
-      widget: new (config: any) => any;
-    };
+    phantom?: any;
+    solana?: any;
   }
 }
 
@@ -182,14 +182,14 @@ type CoinSuggestion = {
   thumb: string;
 };
 
-// Add Phantom wallet type declarations
+interface PhantomSolana {
+  disconnect(): Promise<void>;
+}
+
 declare global {
   interface Window {
-    phantom?: {
-      solana?: {
-        disconnect: () => Promise<void>;
-      };
-    };
+    phantom?: any;
+    solana?: any;
   }
 }
 
