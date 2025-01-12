@@ -407,13 +407,13 @@ export default function JournalistMoai() {
   // When component mounts, show initial suggestions
   useEffect(() => {
     const initialSuggestions = userLanguage === 'tr' ? [
-      'Kripto para haberleri',
-      'Yapay zeka gelişmeleri',
-      'Blockchain projeleri'
+      'AI agent haberleri',
+      'Ethereum güncellemeleri',
+      'Blockchain haberleri'
     ] : [
-      'Cryptocurrency news',
-      'AI developments',
-      'Blockchain projects'
+      'AI agent news',
+      'Ethereum updates',
+      'Blockchain news'
     ];
     setSuggestions(initialSuggestions);
     setTimeout(() => {
