@@ -10,24 +10,39 @@ const openai = new OpenAI({
 // Configure for Edge runtime
 export const runtime = 'edge';
 
+// Helper function to create a standardized response
+const createResponse = (data: any, status = 200) => {
+  return new Response(JSON.stringify({
+    statusCode: status,
+    body: JSON.stringify(data)
+  }), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+    }
+  });
+};
+
 export async function POST(req: Request) {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return createResponse({}, 204);
+  }
+
   try {
     // Parse request body
     const body = await req.json();
 
     // Validate request
     if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        { error: 'OpenAI API key is not configured' },
-        { status: 500 }
-      );
+      return createResponse({ error: 'OpenAI API key is not configured' }, 500);
     }
 
     if (!body.messages || !Array.isArray(body.messages)) {
-      return NextResponse.json(
-        { error: 'Missing or invalid messages array' },
-        { status: 400 }
-      );
+      return createResponse({ error: 'Missing or invalid messages array' }, 400);
     }
 
     // Make OpenAI API call
@@ -40,7 +55,7 @@ export async function POST(req: Request) {
     });
 
     // Return response
-    return NextResponse.json({
+    return createResponse({
       choices: [{
         message: {
           role: completion.choices[0].message.role,
@@ -51,9 +66,10 @@ export async function POST(req: Request) {
 
   } catch (error: any) {
     console.error('OpenAI API Error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Internal server error' },
-      { status: error.status || 500 }
-    );
+    
+    const errorMessage = error.message || 'Internal server error';
+    const statusCode = error.status || 500;
+    
+    return createResponse({ error: errorMessage }, statusCode);
   }
 } 
