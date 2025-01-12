@@ -18,7 +18,6 @@ import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 type Message = {
   type: 'user' | 'bot';
   content: string;
-  timestamp?: number;
 };
 
 const openai = new OpenAI({
@@ -128,53 +127,62 @@ async function translateText(text: string): Promise<string> {
   return translation.choices[0]?.message?.content || text;
 }
 
-async function translateSearchTerms(searchText: string): Promise<string> {
-  const translation = await openai.chat.completions.create({
-    messages: [
-      {
-        role: "system",
-        content: `Sen bir arama terimi çevirmensin. Verilen Türkçe arama terimini İngilizce'ye çevir.
-        Kripto para isimleri ve teknik terimleri olduğu gibi bırak.
-        Sadece arama için en uygun İngilizce karşılığını ver.
-        Örnek:
-        - "ethereum pectra gelişmeleri" -> "ethereum pectra updates"
-        - "bitcoin fiyat analizi" -> "bitcoin price analysis"
-        - "solana son durum" -> "solana latest news"
-        `
-      },
-      {
-        role: "user",
-        content: searchText
-      }
-    ],
-    model: "gpt-3.5-turbo",
-  });
-  
-  return translation.choices[0]?.message?.content || searchText;
-}
-
 export default function JournalistMoai() {
   const hasCheckedBalance = useRef(false);
   const { publicKey, connected, disconnect } = useWallet();
   const [hasToken, setHasToken] = useState(false);
   const [isWalletLoading, setIsWalletLoading] = useState(true);
-  const [isMessageLoading, setIsMessageLoading] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const [userLanguage, setUserLanguage] = useState<'en' | 'tr'>('en');
   const [messages, setMessages] = useState<Message[]>([
     {
       type: 'bot',
-      content: `Hello! I'm JOURNALIST MOAI 🗿\n\nI'm ready to answer your questions about cryptocurrencies, blockchain technology, or any other topic.`,
-      timestamp: Date.now()
+      content: `Hello! I'm JOURNALIST MOAI 🗿️\n\nI'm ready to answer your questions about cryptocurrencies, blockchain technology, or any other topic.`
     }
   ]);
-  const [input, setInput] = useState('');
+  const [searchText, setSearchText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [userLanguage, setUserLanguage] = useState<'en' | 'tr'>('en');
   const [lastSearchTerm, setLastSearchTerm] = useState<string>('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [lastNewsData, setLastNewsData] = useState<ScoredArticle[]>([]);
   const [lastNewsIndex, setLastNewsIndex] = useState<number>(0);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [lastMessageTime, setLastMessageTime] = useState<number>(0);
+
+  // Add relevance score calculation function
+  function calculateRelevanceScore(article: any, searchTerm: string): number {
+    const combinedText = `${article.title} ${article.content}`.toLowerCase();
+    const searchTerms = searchTerm.toLowerCase().split(' ');
+    
+    let score = 0;
+    let matchedTerms = 0;
+
+    searchTerms.forEach(term => {
+      if (combinedText.includes(term)) {
+        matchedTerms++;
+        score += 1;
+      }
+    });
+
+    if (matchedTerms === searchTerms.length) {
+      score += 2;
+    }
+
+    if (combinedText.includes(searchTerm.toLowerCase())) {
+      score += 3;
+    }
+
+    const cryptoSites = ['cointelegraph.com', 'coindesk.com', 'decrypt.co', 'theblockcrypto.com', 'cryptonews.com'];
+    if (article.link) {
+      cryptoSites.forEach(site => {
+        if (article.link.includes(site)) {
+          score += 0.5;
+        }
+      });
+    }
+
+    return score;
+  }
 
   // Token verification effect
   useEffect(() => {
@@ -262,14 +270,14 @@ export default function JournalistMoai() {
 
   // Watch for new messages and update lastMessageTime
   useEffect(() => {
-    if (messages.length > 0 && !isMessageLoading) {
+    if (messages.length > 0 && !isLoading) {
       setLastMessageTime(Date.now());
     }
-  }, [messages, isMessageLoading]);
+  }, [messages, isLoading]);
 
   // Show suggestions 3 seconds after the last message
   useEffect(() => {
-    if (lastMessageTime > 0 && !isMessageLoading) {
+    if (lastMessageTime > 0 && !isLoading) {
       const timer = setTimeout(async () => {
         // If we have a lastSearchTerm, generate related suggestions
         if (lastSearchTerm) {
@@ -282,26 +290,27 @@ export default function JournalistMoai() {
                     `Verilen terimle ilgili 3 farklı haber araması öner ve JSON formatında dön.
                     
                     Önemli kurallar:
-                    1. İlk öneri her zaman "Daha fazla [terim] haberi" olsun
+                    1. İlk öneri her zaman "Daha fazla [TAM ARAMA TERİMİ] haberi" olsun
                     2. Diğer öneriler aynı konuyla ilgili farklı açılardan haberler olsun
                     3. Çok kısa ve net olsun (2-4 kelime)
                     4. Sadece haber araması olacak şekilde yaz
+                    5. Ana terimi asla parçalama, tam olarak kullan
                     
-                    Örnek - "bitcoin" için:
+                    Örnek - "ethereum pectra" için:
                     {
                       "suggestions": [
-                        "Daha fazla bitcoin haberi",
-                        "Bitcoin regülasyon haberleri",
-                        "Bitcoin ETF haberleri"
+                        "Daha fazla ethereum pectra haberi",
+                        "Ethereum pectra gelişmeleri",
+                        "Ethereum pectra güncellemeler"
                       ]
                     }
                     
-                    Örnek - "yapay zeka" için:
+                    Örnek - "bitcoin layer 2" için:
                     {
                       "suggestions": [
-                        "Daha fazla yapay zeka haberi",
-                        "Yapay zeka güvenlik haberleri",
-                        "Yapay zeka şirket haberleri"
+                        "Daha fazla bitcoin layer 2 haberi",
+                        "Bitcoin layer 2 projeleri",
+                        "Bitcoin layer 2 entegrasyonları"
                       ]
                     }
                     
@@ -309,26 +318,27 @@ export default function JournalistMoai() {
                     `Suggest 3 different news searches related to the given term and return in JSON format.
                     
                     Important rules:
-                    1. First suggestion should always be "More [term] news"
+                    1. First suggestion should always be "More [EXACT SEARCH TERM] news"
                     2. Other suggestions should be different aspects of the same topic
                     3. Keep it very short and clear (2-4 words)
                     4. Write only as news searches
+                    5. Never split the main term, use it exactly
                     
-                    Example - for "bitcoin":
+                    Example - for "ethereum pectra":
                     {
                       "suggestions": [
-                        "More bitcoin news",
-                        "Bitcoin regulation news",
-                        "Bitcoin ETF news"
+                        "More ethereum pectra news",
+                        "Ethereum pectra updates",
+                        "Ethereum pectra development"
                       ]
                     }
                     
-                    Example - for "AI":
+                    Example - for "bitcoin layer 2":
                     {
                       "suggestions": [
-                        "More AI news",
-                        "AI security news",
-                        "AI company news"
+                        "More bitcoin layer 2 news",
+                        "Bitcoin layer 2 projects",
+                        "Bitcoin layer 2 integrations"
                       ]
                     }
                     
@@ -339,7 +349,7 @@ export default function JournalistMoai() {
                   content: lastSearchTerm
                 }
               ],
-              model: "gpt-",
+              model: "gpt-3.5-turbo",
               response_format: { type: "json_object" }
             });
 
@@ -368,15 +378,20 @@ export default function JournalistMoai() {
             }, 100);
           }
         } else {
+          // Get clean search term for suggestions
+          const cleanTerm = lastSearchTerm.toLowerCase()
+            .replace(/(haberler|haberleri|haber|news|latest|updates|güncel|son|durum)/g, '')
+            .trim();
+
           // Initial suggestions (news topics)
           const newSuggestions = userLanguage === 'tr' ? [
-            'Kripto para haberleri',
-            'Yapay zeka haberleri',
-            'Blockchain haberleri'
+            `${cleanTerm} hakkında daha fazla haber`,
+            `${cleanTerm} gelişmeleri`,
+            `${cleanTerm} güncellemeler`
           ] : [
-            'The latest on Ethereum updates',
-            'AI agents news',
-            'Blockchain news'
+            `More news about ${cleanTerm}`,
+            `${cleanTerm} updates`,
+            `${cleanTerm} developments`
           ];
           setSuggestions(newSuggestions);
           setTimeout(() => {
@@ -387,20 +402,24 @@ export default function JournalistMoai() {
 
       return () => clearTimeout(timer);
     }
-  }, [lastMessageTime, isMessageLoading, lastSearchTerm, userLanguage]);
+  }, [lastMessageTime, isLoading, lastSearchTerm, userLanguage]);
 
   // When component mounts, show initial suggestions
   useEffect(() => {
-    const initialSuggestions = [
-      'AI Agents news',
-      'Latest Ethereum developments',
-      'Bitcoin and crypto regulations'
+    const initialSuggestions = userLanguage === 'tr' ? [
+      'Kripto para haberleri',
+      'Yapay zeka gelişmeleri',
+      'Blockchain projeleri'
+    ] : [
+      'Cryptocurrency news',
+      'AI developments',
+      'Blockchain projects'
     ];
     setSuggestions(initialSuggestions);
     setTimeout(() => {
       setShowSuggestions(true);
     }, 100);
-  }, []);
+  }, [userLanguage]);
 
   // Update suggestions when lastSearchTerm changes
   useEffect(() => {
@@ -435,9 +454,12 @@ export default function JournalistMoai() {
       return;
     }
 
-    setIsMessageLoading(true);
+    setIsLoading(true);
     const nextBatch = lastNewsData.slice(lastNewsIndex, lastNewsIndex + 5);
     setLastNewsIndex(prev => prev + 5);
+
+    // Check if the last search was in Turkish
+    const isTurkishQuery = /[çğıöşüÇĞİÖŞÜ]|haberleri|haber|güncel|son|durum/.test(lastSearchTerm.toLowerCase());
 
     // Process and display more news
     for (const news of nextBatch) {
@@ -476,12 +498,12 @@ Return in JSON format:
         try {
           const translatedText = JSON.parse(translation.choices[0]?.message?.content || "{}");
           
-          // Always use translated text for Turkish users, force translation
-          const finalTitle = userLanguage === 'tr' ? 
+          // Always translate if the query was in Turkish
+          const finalTitle = isTurkishQuery ? 
             (translatedText.title || await translateText(news.title)) : 
             news.title;
             
-          const finalContent = userLanguage === 'tr' ? 
+          const finalContent = isTurkishQuery ? 
             (translatedText.content || await translateText(news.content)) : 
             news.content;
 
@@ -489,7 +511,7 @@ Return in JSON format:
             messages: [
               {
                 role: "system",
-                content: userLanguage === 'tr' ?
+                content: isTurkishQuery ?
                   `Sen hızlı ve net özetler yapan bir haber editörüsün.
                   
                   Kurallar:
@@ -517,7 +539,7 @@ Return in JSON format:
             model: "gpt-3.5-turbo",
           });
 
-          const translationIndicator = userLanguage === 'tr' ? '🔄 ' : '';
+          const translationIndicator = isTurkishQuery ? '🔄 ' : '';
           const summaryContent = summary.choices[0]?.message?.content || finalContent;
           
           setMessages(prev => [...prev, {
@@ -531,210 +553,105 @@ Return in JSON format:
         console.error('News processing error:', error);
       }
     }
-    setIsMessageLoading(false);
+    setIsLoading(false);
   };
 
-  const handleSubmit = async (e: React.FormEvent, directMessage?: string) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement> | null, directMessage?: string) => {
     e?.preventDefault();
     
-    const searchText = directMessage || input;
-    if (!searchText.trim()) return;
-    
-    setInput('');
-    setLastSearchTerm(searchText);
-    setMessages(prev => [...prev, { type: 'user', content: searchText }]);
-    setIsMessageLoading(true);
+    const userMessage = directMessage || searchText;
+    if (!userMessage.trim()) return;
+
+    setMessages(prev => [...prev, { type: 'user', content: userMessage }]);
+    setSearchText('');
+    setIsLoading(true);
+
+    // Check if query is in Turkish
+    const isTurkishQuery = /[çğıöşüÇĞİÖŞÜ]|haberleri|haber|güncel|son|durum/.test(userMessage.toLowerCase());
 
     try {
-      // Translate search terms to English while keeping original for display
-      const englishSearchTerms = await translateSearchTerms(searchText);
-      const searchTerms = englishSearchTerms.toLowerCase().split(' ');
+      // Clean search text and extract main term
+      const cleanedText = userMessage.toLowerCase().replace(/(haberler|haberleri|haber|news|latest|updates|güncel|son|durum)/g, '').trim();
+      const mainSearchTerm = cleanedText.split(' ')[0];
+
+      // Try primary news source first
+      let response = await fetch(`/api/news?q=${encodeURIComponent(mainSearchTerm)}`);
+      let data;
       
-      // Display the search message in Turkish
-      const searchMessage = userLanguage === 'tr' ? 
-        `🗞️ ${searchText.toUpperCase()} hakkında ` :
-        `🗞️ Found news about ${searchText.toUpperCase()} `;
-
-      // Rest of the search logic using englishSearchTerms
-      const response = await fetch('/api/news');
+      // If primary source fails, try CryptoCompare API as fallback
       if (!response.ok) {
-        throw new Error('News API request failed');
-      }
-
-      const data = await response.json();
-      if (!data.news_results || !data.news_results.length) {
-        setMessages(prev => [...prev, {
-          type: 'bot',
-          content: userLanguage === 'tr' ?
-            'Üzgünüm, bu konu hakkında güncel haber bulamadım.' :
-            'Sorry, I could not find any recent news on this topic.'
-        }]);
-        setIsMessageLoading(false);
-        return;
-      }
-
-      // Alakalılık skorunu hesapla ve haberleri filtrele
-      const scoredNews = data.news_results
-        .map((article: any) => {
-          const combinedText = `${article.title} ${article.snippet}`.toLowerCase();
-          
-          // Alakalılık skoru hesapla
-          let relevanceScore = 0;
-          let matchedTerms = 0;
-
-          // Tüm terimlerin eşleşmesini kontrol et
-          searchTerms.forEach((term: string) => {
-            if (combinedText.includes(term.toLowerCase())) {
-              matchedTerms++;
-              relevanceScore += 1;
-            }
-          });
-
-          // Tüm terimler varsa bonus puan
-          if (matchedTerms === searchTerms.length) {
-            relevanceScore += 2;
-          }
-
-          // Tam eşleşme varsa ekstra bonus
-          if (combinedText.includes(searchText.toLowerCase())) {
-            relevanceScore += 3;
-          }
-
-          // Kripto haber sitelerinden gelenlere ek puan
-          const cryptoSites = ['cointelegraph.com', 'coindesk.com', 'decrypt.co', 'theblockcrypto.com', 'cryptonews.com'];
-          if (article.link) {
-            cryptoSites.forEach(site => {
-              if (article.link.includes(site)) {
-                relevanceScore += 0.5;
-              }
-            });
-          }
-
-          return {
+        console.log('Primary news source failed, trying fallback...');
+        response = await fetch(`https://min-api.cryptocompare.com/data/v2/news/?lang=EN&categories=${encodeURIComponent(mainSearchTerm)}`);
+        data = await response.json();
+        
+        if (data?.Data) {
+          // Transform CryptoCompare data to match our format
+          data.articles = data.Data.map((article: any) => ({
             title: article.title,
-            content: article.snippet,
-            description: article.snippet,
-            date: article.date,
-            sourceUrl: article.link,
-            sourceText: article.source,
-            relevanceScore,
-            imageUrl: article.thumbnail
-          };
-        })
-        .filter((article: ScoredArticle) => article.relevanceScore > searchTerms.length) // En az tüm terimler eşleşmeli
-        .sort((a: ScoredArticle, b: ScoredArticle) => b.relevanceScore - a.relevanceScore);
+            content: article.body,
+            link: article.url,
+            source: article.source,
+            sourceUrl: article.url,
+            sourceText: article.source_info?.name || article.source,
+            date: new Date(article.published_on * 1000).toISOString()
+          }));
+        }
+      } else {
+        data = await response.json();
+      }
 
-      // Store all scored news for later use
+      if (!data?.articles?.length) {
+        throw new Error('No news found');
+      }
+
+      // Process news articles
+      const scoredNews = data.articles.map((article: any) => ({
+        ...article,
+        title: article.title,
+        content: article.content || article.snippet || article.body,
+        link: article.link || article.url,
+        score: calculateRelevanceScore(article, mainSearchTerm)
+      })).sort((a: any, b: any) => b.score - a.score);
+
+      // Store news data for later use
       setLastNewsData(scoredNews);
       setLastNewsIndex(5);
+      setLastSearchTerm(mainSearchTerm);
 
-      // Display first 5 news
-      const firstBatch = scoredNews.slice(0, 5);
+      // Display result count message
+      const resultCount = scoredNews.length;
+      const resultMessage = isTurkishQuery ? 
+        `🗞️ ${userMessage.toUpperCase()} hakkında ${resultCount} haber buldum:` :
+        `🗞️ Found ${resultCount} news about ${userMessage.toUpperCase()}:`;
       
-      // Process and display each news
-      for (const news of firstBatch) {
+      setMessages(prev => [...prev, { type: 'bot', content: resultMessage }]);
+
+      // Display first batch of news articles
+      const firstBatch = scoredNews.slice(0, 5);
+      for (const article of firstBatch) {
         try {
-          const translation = await openai.chat.completions.create({
-            messages: [
-              {
-                role: "system",
-                content: userLanguage === 'tr' ? 
-                  `Sen profesyonel bir çevirmen ve kripto haber editörüsün. İngilizce haberleri Türkçe'ye çevir ve özetle. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak.
-
-ÖNEMLİ: Her haberi mutlaka Türkçe'ye çevir. Çeviri yapmadan asla geçme.
-
-JSON formatında dön:
-{
-  "title": "çevrilmiş başlık",
-  "content": "çevrilmiş içerik"
-}` :
-                  `You are a professional translator and crypto news editor. Keep the news in English but summarize if needed. Keep technical terms and cryptocurrency names unchanged.
-
-Return in JSON format:
-{
-  "title": "title",
-  "content": "content"
-}`
-              },
-              {
-                role: "user",
-                content: `Title: ${news.title}\nContent: ${news.content}`
-              }
-            ],
-            model: "gpt-4-turbo-preview",
-            response_format: { type: "json_object" }
-          });
-
-          try {
-            const translatedText = JSON.parse(translation.choices[0]?.message?.content || "{}");
-            
-            // Always use translated text for Turkish users, force translation
-            const finalTitle = userLanguage === 'tr' ? 
-              (translatedText.title || await translateText(news.title)) : 
-              news.title;
-              
-            const finalContent = userLanguage === 'tr' ? 
-              (translatedText.content || await translateText(news.content)) : 
-              news.content;
-
-            const summary = await openai.chat.completions.create({
-              messages: [
-                {
-                  role: "system",
-                  content: userLanguage === 'tr' ?
-                    `Sen hızlı ve net özetler yapan bir haber editörüsün.
-                    
-                    Kurallar:
-                    1. Haberi 2 kısa paragrafta özetle
-                    2. İlk paragrafta ana konuyu anlat
-                    3. İkinci paragrafta önemli detayları ver
-                    4. Kısa ve öz cümleler kullan
-                    5. Sadece en önemli bilgilere odaklan
-                    6. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak` :
-                    `You are a news editor who makes quick and clear summaries.
-                    
-                    Rules:
-                    1. Summarize the news in 2 short paragraphs
-                    2. First paragraph for the main topic
-                    3. Second paragraph for important details
-                    4. Use short and concise sentences
-                    5. Focus only on the most important information
-                    6. Keep technical terms and cryptocurrency names unchanged`
-                },
-                {
-                  role: "user",
-                  content: `${finalTitle}\n\n${finalContent}`
-                }
-              ],
-              model: "gpt-3.5-turbo",
-            });
-
-            const translationIndicator = userLanguage === 'tr' ? '🔄 ' : '';
-            const summaryContent = summary.choices[0]?.message?.content || finalContent;
-            
-            setMessages(prev => [...prev, {
-              type: 'bot',
-              content: `${translationIndicator}${finalTitle}\n\n${summaryContent}\n\nKaynak: <a href="${news.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">${news.sourceText}</a>`
-            }]);
-          } catch (error) {
-            console.error('News processing error:', error);
-          }
+          const title = isTurkishQuery ? await translateText(article.title) : article.title;
+          const content = isTurkishQuery ? await translateText(article.content) : article.content;
+          
+          const newsMessage = `📰 ${title}\n\n${content}\n\n🔗 Source: ${article.sourceUrl || article.link}`;
+          setMessages(prev => [...prev, { type: 'bot', content: newsMessage }]);
         } catch (error) {
-          console.error('News processing error:', error);
+          console.error('Error processing article:', error);
         }
       }
-      setIsMessageLoading(false);
     } catch (error) {
-      console.error('Error fetching news:', error);
+      console.error('Error:', error);
+      const errorMessage = isTurkishQuery ? 
+        'Üzgünüm, şu anda haber kaynağına erişimde sorun yaşıyorum. Lütfen birkaç dakika sonra tekrar deneyin.' :
+        'Sorry, I am having trouble accessing the news source right now. Please try again in a few minutes.';
+      
       setMessages(prev => [...prev, {
         type: 'bot',
-        content: userLanguage === 'tr' ?
-          'Üzgünüm, haberleri getirirken bir hata oluştu. Lütfen tekrar deneyin.' :
-          'Sorry, an error occurred while fetching the news. Please try again.'
+        content: errorMessage
       }]);
     }
 
-    setIsMessageLoading(false);
+    setIsLoading(false);
   };
 
   // Auto scroll to bottom when new messages arrive
@@ -878,7 +795,7 @@ Return in JSON format:
             </div>
           </div>
         ))}
-        {isMessageLoading && (
+        {isLoading && (
           <div className="flex justify-start">
             <div className="bg-gray-800/80 text-white rounded-2xl rounded-bl-none p-4 max-w-[80%] animate-pulse shadow-lg shadow-black/20 backdrop-blur-sm">
               <div className="flex items-center gap-2">
@@ -893,7 +810,7 @@ Return in JSON format:
 
       {/* Suggestions Area */}
       <div className="absolute left-1/2 -translate-x-1/2 w-full max-w-4xl bottom-24">
-        {suggestions.length > 0 && !isMessageLoading && (
+        {suggestions.length > 0 && !isLoading && (
           <div className={`flex justify-center gap-3 flex-wrap transition-opacity duration-1000 ${showSuggestions ? 'opacity-100' : 'opacity-0'}`}>
             {suggestions.map((suggestion, index) => (
               <button
@@ -917,18 +834,18 @@ Return in JSON format:
           <form onSubmit={handleSubmit} className="flex gap-2">
             <input
               type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
               placeholder={userLanguage === 'tr' ? 'Bir haber konusu yazın...' : 'Type a news topic...'}
-              disabled={isMessageLoading}
+              disabled={isLoading}
               className="flex-1 bg-gray-800/80 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 placeholder-gray-400 backdrop-blur-sm"
             />
             <button
               type="submit"
-              disabled={isMessageLoading}
+              disabled={isLoading}
               className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20 font-medium"
             >
-              {isMessageLoading ? 'Responding...' : 'Send'}
+              {isLoading ? 'Responding...' : 'Send'}
             </button>
           </form>
         </div>
