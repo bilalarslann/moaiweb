@@ -15,6 +15,14 @@ type CustomItem = {
   };
 };
 
+// Türkçe karakter kontrolü için yardımcı fonksiyon
+function containsTurkishChars(text: string): boolean {
+  const turkishChars = /[çğıöşüÇĞİÖŞÜ]/;
+  return turkishChars.test(text) || 
+         text.toLowerCase().includes('haberleri') || 
+         text.toLowerCase().includes('haber');
+}
+
 const parser = new Parser<CustomItem>({
   customFields: {
     item: [
@@ -84,7 +92,12 @@ export async function GET(request: Request) {
 
     // Hala başarısızsa hata döndür
     if (!feed?.items?.length) {
-      throw new Error(lastError?.message || 'No results found');
+      const errorMessage = lastError?.message?.toLowerCase().includes('timeout') || 
+                         lastError?.message?.toLowerCase().includes('429') ?
+        'Çok fazla istek yapıldı. Lütfen birkaç dakika bekleyip tekrar deneyin.' :
+        'Haber kaynağına erişimde sorun yaşanıyor. Lütfen daha sonra tekrar deneyin.';
+      
+      throw new Error(errorMessage);
     }
 
     // Haberleri işle
@@ -94,7 +107,8 @@ export async function GET(request: Request) {
       snippet: item.contentSnippet || '',
       date: item.pubDate || new Date().toISOString(),
       source: item.source || item.creator || '',
-      thumbnail: item.media ? item.media.$.url : null
+      thumbnail: item.media ? item.media.$.url : null,
+      needsTranslation: containsTurkishChars(query) // Türkçe sorgu için çeviri gerekiyor mu?
     }));
 
     // Sonuçları önbelleğe al
@@ -115,9 +129,17 @@ export async function GET(request: Request) {
       return NextResponse.json(cachedData.data);
     }
 
+    // Hata mesajını özelleştir
+    let errorMessage = 'Haber kaynağına erişimde sorun yaşanıyor. Lütfen daha sonra tekrar deneyin.';
+    if (error instanceof Error) {
+      if (error.message.includes('fazla istek')) {
+        errorMessage = error.message;
+      }
+    }
+
     return NextResponse.json({ 
       error: 'Failed to fetch news',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: errorMessage,
       news_results: [] 
     }, { status: 500 });
   }
