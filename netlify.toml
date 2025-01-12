@@ -1,36 +1,14 @@
 [build]
   command = "npm run build"
   publish = ".next"
-  
+
 [build.environment]
   NEXT_USE_NETLIFY_EDGE = "true"
   NODE_VERSION = "18"
-  NEXT_TELEMETRY_DISABLED = "1"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-[functions]
-  node_bundler = "esbuild"
-  external_node_modules = ["@edge-runtime/primitives"]
-
 [[edge_functions]]
   function = "scrape"
-  path = "/api/scrape"
-
-[build.processing]
-  skip_processing = true
-
-[build.processing.css]
-  bundle = false
-  minify = false
-
-[build.processing.js]
-  bundle = false
-  minify = false
-
-[build.processing.html]
-  pretty_urls = true
-
-[build.processing.images]
-  compress = false 
+  path = "/api/scrape" 
