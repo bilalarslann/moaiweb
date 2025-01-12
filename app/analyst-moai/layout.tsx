@@ -33,4 +33,5 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </WalletProvider>
     </ConnectionProvider>
   );
-} 
+}
+//herşey güncellendi
