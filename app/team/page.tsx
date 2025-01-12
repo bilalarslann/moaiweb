@@ -8,13 +8,11 @@ const founders = [
   {
     name: 'EMİR ŞAHİN',
     role: 'Co-Founder',
-    description: 'Blockchain Developer & AI Specialist',
     image: '/moai.webp'
   },
   {
     name: 'A. BİLAL ARSLAN',
     role: 'Co-Founder',
-    description: 'Full Stack Developer & AI Engineer',
     image: '/moai.webp'
   }
 ];
@@ -61,8 +59,7 @@ export default function TeamPage() {
                   />
                 </div>
                 <h2 className="text-2xl font-bold text-white mb-2">{founder.name}</h2>
-                <p className="text-purple-400 font-medium mb-2">{founder.role}</p>
-                <p className="text-gray-300/80">{founder.description}</p>
+                <p className="text-purple-400 font-medium">{founder.role}</p>
               </div>
             </div>
           ))}
