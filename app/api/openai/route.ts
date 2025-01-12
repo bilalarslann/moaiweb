@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     // Validate request body
     const body = await req.json();
     if (!body.messages || !Array.isArray(body.messages)) {
-      return new NextResponse(JSON.stringify({ error: 'Invalid request body' }), {
+      return NextResponse.json({ error: 'Invalid request body' }, {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -24,15 +24,37 @@ export async function POST(req: Request) {
       max_tokens: body.max_tokens || 1000,
     });
 
-    return new NextResponse(JSON.stringify(completion), {
+    // Extract and format the response
+    const formattedResponse = {
+      choices: completion.choices.map(choice => ({
+        message: {
+          role: choice.message.role,
+          content: choice.message.content
+        },
+        finish_reason: choice.finish_reason,
+        index: choice.index
+      })),
+      created: completion.created,
+      model: completion.model,
+      usage: completion.usage
+    };
+
+    return NextResponse.json(formattedResponse, {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
 
   } catch (error: any) {
     console.error('OpenAI API Error:', error);
-    return new NextResponse(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
+    
+    // Format error response
+    const errorResponse = {
+      error: error.message || 'Internal server error',
+      details: error.response?.data || null
+    };
+
+    return NextResponse.json(errorResponse, {
+      status: error.status || 500,
       headers: { 'Content-Type': 'application/json' },
     });
   }
