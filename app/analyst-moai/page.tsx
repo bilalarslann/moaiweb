@@ -612,7 +612,32 @@ const handleDisconnect = async (disconnect: () => Promise<void>) => {
 
 // Add helper function to extract coin symbol from message
 const extractCoinSymbol = (message: string): string | null => {
-  // Common coin symbols pattern (3-5 characters followed by optional USDT)
+  // Common coin name to symbol mapping
+  const commonCoins: { [key: string]: string } = {
+    'bitcoin': 'BTC',
+    'ethereum': 'ETH',
+    'solana': 'SOL',
+    'cardano': 'ADA',
+    'ripple': 'XRP',
+    'dogecoin': 'DOGE',
+    'polkadot': 'DOT',
+    'avalanche': 'AVAX',
+    'binance': 'BNB',
+    'matic': 'MATIC',
+    'polygon': 'MATIC'
+  } as const;
+
+  // Convert message to lowercase for case-insensitive matching
+  const lowerMessage = message.toLowerCase();
+
+  // First check for common coin names
+  for (const [name, symbol] of Object.entries(commonCoins)) {
+    if (lowerMessage.includes(name)) {
+      return symbol;
+    }
+  }
+
+  // Then check for ticker symbols (3-5 characters followed by optional USDT)
   const symbolPattern = /\b[A-Za-z]{3,5}(?:USDT)?\b/g;
   const matches = message.match(symbolPattern);
   
@@ -622,7 +647,7 @@ const extractCoinSymbol = (message: string): string | null => {
   const commonWords = ['USDT', 'WHAT', 'WHEN', 'WHERE', 'WILL', 'DOES', 'THIS', 'THAT', 'HELP', 'LOOK', 'TELL'];
   const possibleSymbols = matches.filter(match => !commonWords.includes(match.toUpperCase()));
   
-  return possibleSymbols[0] || null;
+  return possibleSymbols[0]?.toUpperCase() || null;
 };
 
 // Add function to check if message is asking for coin analysis
@@ -1418,4 +1443,4 @@ export default function AnalistMoai() {
       </div>
     </div>
   );
-} 
+}
