@@ -16,4 +16,14 @@
 
 [[edge_functions]]
   function = "api/*"
-  path = "/api/*" 
+  path = "/api/*"
+
+# Function bundle optimizations
+[functions."*"]
+  included_files = []
+  external_node_modules = [
+    "@netlify/functions",
+    "crypto-js",
+    "puppeteer-core",
+    "@sparticuz/chromium"
+  ] 
