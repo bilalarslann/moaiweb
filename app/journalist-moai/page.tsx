@@ -6,6 +6,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { prompts } from '@/config/prompts';
 
 const MOAI_TOKEN_ADDRESS = '2GbE1pq8GiwpHhdGWKUBLXJfBKvKLoNWe1E4KPtbED2M';
 const SOLANA_RPC_URL = 'https://solana-mainnet.rpc.extrnode.com/a6f9fc24-29e2-43fb-8f5c-de216933db71';
@@ -351,8 +352,8 @@ export default function GazeticiMoai() {
               {
                 role: "system",
                 content: userLanguage === 'tr' ? 
-                  process.env.NEXT_PUBLIC_SUGGESTIONS_PROMPT_TR || SUGGESTIONS_PROMPT_TR :
-                  process.env.NEXT_PUBLIC_SUGGESTIONS_PROMPT_EN || SUGGESTIONS_PROMPT_EN
+                  prompts.suggestions.tr :
+                  prompts.suggestions.en
               },
               {
                 role: "user",
@@ -404,7 +405,7 @@ export default function GazeticiMoai() {
 
       return () => clearTimeout(timer);
     }
-  }, [lastMessageTime, isLoading, lastSearchTerm, userLanguage]);
+  }, [lastMessageTime, lastSearchTerm, userLanguage, isLoading]);
 
   // When component mounts, show initial suggestions
   useEffect(() => {
@@ -468,8 +469,8 @@ export default function GazeticiMoai() {
           {
             role: "system",
             content: userLanguage === 'tr' ? 
-              process.env.NEXT_PUBLIC_TRANSLATION_PROMPT_TR || TRANSLATION_PROMPT_TR :
-              process.env.NEXT_PUBLIC_TRANSLATION_PROMPT_EN || TRANSLATION_PROMPT_EN
+              prompts.translation.tr :
+              prompts.translation.en
           },
           {
             role: "user",
@@ -486,8 +487,8 @@ export default function GazeticiMoai() {
           {
             role: "system",
             content: userLanguage === 'tr' ?
-              process.env.NEXT_PUBLIC_NEWS_EDITOR_PROMPT_TR || "" :
-              process.env.NEXT_PUBLIC_NEWS_EDITOR_PROMPT_EN || ""
+              prompts.newsEditor.tr :
+              prompts.newsEditor.en
           },
           {
             role: "user",
@@ -538,7 +539,7 @@ export default function GazeticiMoai() {
       const languagePrompt = await callOpenAI([
         {
           role: "system",
-          content: process.env.NEXT_PUBLIC_LANGUAGE_DETECTOR_PROMPT_EN || ""
+          content: prompts.languageDetector.en
         },
         {
           role: "user",
@@ -565,8 +566,8 @@ export default function GazeticiMoai() {
               {
                 role: "system",
                 content: detectedLanguage === 'tr' ?
-                  process.env.NEXT_PUBLIC_NEWS_EDITOR_PROMPT_TR || "" :
-                  process.env.NEXT_PUBLIC_NEWS_EDITOR_PROMPT_EN || ""
+                  prompts.newsEditor.tr :
+                  prompts.newsEditor.en
               },
               {
                 role: "user",
@@ -591,8 +592,8 @@ export default function GazeticiMoai() {
           setMessages(prev => [...prev, {
             type: 'bot',
             content: detectedLanguage === 'tr' ?
-              'Üzgünüm, haberleri getirirken bir hata oluştu. Lütfen tekrar deneyin.' :
-              'Sorry, an error occurred while fetching the news. Please try again.'
+              'Üzgünüm, haberleri getirirken bir hata oluştu.' :
+              'Sorry, there was an error fetching the news.'
           }]);
         }
       } else {
@@ -601,8 +602,8 @@ export default function GazeticiMoai() {
           {
             role: "system",
             content: detectedLanguage === 'tr' ?
-              process.env.NEXT_PUBLIC_JOURNALIST_PROMPT_TR || "" :
-              process.env.NEXT_PUBLIC_JOURNALIST_PROMPT_EN || ""
+              prompts.journalist.tr :
+              prompts.journalist.en
           },
           {
             role: "user",

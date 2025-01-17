@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Parser from 'rss-parser';
 import OpenAI from 'openai';
+import { prompts } from '@/config/prompts';
 
 const openai = new OpenAI();
 
@@ -33,7 +34,7 @@ async function translateNews(title: string, content: string) {
       messages: [
         {
           role: "system",
-          content: process.env.NEXT_PUBLIC_NEWS_TRANSLATION_PROMPT_TR || ""
+          content: prompts.newsTranslation.tr
         },
         {
           role: "user",
