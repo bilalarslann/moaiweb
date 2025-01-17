@@ -399,7 +399,10 @@ const TradingViewWidget = ({ symbol, interval = '240', onChartReady, isFullscree
       script.src = 'https://s3.tradingview.com/tv.js';
       script.async = true;
       script.crossOrigin = 'anonymous';
-      script.integrity = process.env.NEXT_PUBLIC_TRADINGVIEW_SCRIPT_HASH;
+      const scriptHash = process.env.NEXT_PUBLIC_TRADINGVIEW_SCRIPT_HASH;
+      if (scriptHash) {
+        script.integrity = scriptHash;
+      }
       
       // Add nonce for CSP
       script.nonce = (window as any).__NEXT_DATA__?.props?.nonce || '';
