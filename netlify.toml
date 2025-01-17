@@ -23,7 +23,5 @@
   included_files = []
   external_node_modules = [
     "@netlify/functions",
-    "crypto-js",
-    "puppeteer-core",
-    "@sparticuz/chromium"
+    "crypto-js"
   ] 
