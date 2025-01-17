@@ -16,6 +16,7 @@ export const prompts = {
     tr: `${process.env.PROMPT_SUGGESTIONS_SYSTEM_TR}\n\n${process.env.PROMPT_SUGGESTIONS_RULES_TR}\n\n${process.env.PROMPT_SUGGESTIONS_FORMAT_TR}`
   },
   translation: {
+    en: `${process.env.PROMPT_TRANSLATE_SYSTEM_EN}\n\n${process.env.PROMPT_TRANSLATE_RULES_EN}\n\n${process.env.PROMPT_TRANSLATE_FORMAT_EN}`,
     tr: `${process.env.PROMPT_TRANSLATE_SYSTEM_TR}\n\n${process.env.PROMPT_TRANSLATE_RULES_TR}\n\n${process.env.PROMPT_TRANSLATE_FORMAT_TR}`
   },
   newsTranslation: {
