@@ -18,7 +18,7 @@ export default function GazeticiMoai() {
   const [messages, setMessages] = useState<Message[]>([
     {
       type: 'bot',
-      content: `Merhaba! Ben GAZETECİ MOAI 🗿\n\nSorularınızı yanıtlamaya hazırım. Kripto para, blockchain teknolojisi veya herhangi bir konuda bana soru sorabilirsiniz.`
+      content: process.env.NEXT_PUBLIC_INITIAL_MESSAGE_TR || `Merhaba! Ben GAZETECİ MOAI 🗿\n\nSorularınızı yanıtlamaya hazırım. Kripto para, blockchain teknolojisi veya herhangi bir konuda bana soru sorabilirsiniz.`
     }
   ]);
   const [input, setInput] = useState('');
@@ -49,16 +49,16 @@ export default function GazeticiMoai() {
     setInput('');
     setIsLoading(true);
 
-    // Kullanıcı mesajını ekle
+    // Add user message
     setMessages(prev => [...prev, { type: 'user', content: userMessage }]);
 
     try {
-      // Mesajı analiz et ve anahtar kelimeleri bul
+      // Analyze message and find keywords
       const keywordCompletion = await openai.chat.completions.create({
         messages: [
           {
             role: "system",
-            content: "Verilen mesajdan kripto para, blockchain teknolojisi veya finans ile ilgili en önemli anahtar kelimeyi çıkar ve mesajın haber talebi olup olmadığını belirt. Cevabı JSON formatında ver. Örnek: { 'keyword': 'bitcoin', 'isNewsRequest': true } veya { 'keyword': 'ethereum', 'isNewsRequest': false }. Haber talebi örnekleri: 'Bitcoin haberleri neler?', 'Ethereum ile ilgili son gelişmeler neler?', 'Ripple hakkında son haberler'. Eğer mesaj bir haber talebi değilse (örneğin: 'Bitcoin nedir?', 'Ethereum nasıl çalışır?') isNewsRequest false olmalı."
+            content: process.env.NEXT_PUBLIC_KEYWORD_ANALYSIS_PROMPT_TR || ""
           },
           {
             role: "user",
@@ -75,7 +75,7 @@ export default function GazeticiMoai() {
 
       if (keyword && keyword !== 'yok' && keyword !== 'bilinmiyor') {
         if (isNewsRequest) {
-          // Haber talebi ise direkt haberleri göster
+          // If news request, show news directly
           setMessages(prev => [...prev, {
             type: 'bot',
             content: `🗞️ ${keyword.toUpperCase()} ile ilgili son gelişmeleri aktarıyorum:`
@@ -113,12 +113,12 @@ export default function GazeticiMoai() {
             }]);
           }
         } else {
-          // Haber talebi değilse normal OpenAI cevabı al
+          // If not news request, get normal OpenAI response
           const completion = await openai.chat.completions.create({
             messages: [
               {
                 role: "system",
-                content: "Sen GAZETECİ MOAI adında bir kripto para ve blockchain uzmanı yapay zeka asistanısın. Sorulara detaylı ve anlaşılır cevaplar vermelisin. Her zaman nazik ve yardımsever olmalısın. Cevaplarının sonuna 'Bu bilgiler sadece eğitim amaçlıdır, yatırım tavsiyesi değildir.' notunu eklemelisin."
+                content: process.env.NEXT_PUBLIC_JOURNALIST_PROMPT_TR || ""
               },
               {
                 role: "user",
@@ -136,12 +136,12 @@ export default function GazeticiMoai() {
           }]);
         }
       } else {
-        // Keyword bulunamadıysa normal OpenAI cevabı al
+        // If no keyword found, get normal OpenAI response
         const completion = await openai.chat.completions.create({
           messages: [
             {
               role: "system",
-              content: "Sen GAZETECİ MOAI adında bir kripto para ve blockchain uzmanı yapay zeka asistanısın. Sorulara detaylı ve anlaşılır cevaplar vermelisin. Her zaman nazik ve yardımsever olmalısın. Cevaplarının sonuna 'Bu bilgiler sadece eğitim amaçlıdır, yatırım tavsiyesi değildir.' notunu eklemelisin."
+              content: process.env.NEXT_PUBLIC_JOURNALIST_PROMPT_TR || ""
             },
             {
               role: "user",

@@ -33,21 +33,7 @@ async function translateNews(title: string, content: string) {
       messages: [
         {
           role: "system",
-          content: `Sen profesyonel bir çevirmen ve kripto haber editörüsün. İngilizce haberleri Türkçe'ye çevir.
-
-ÖNEMLİ KURALLAR:
-1. Her haberi MUTLAKA Türkçe'ye çevir
-2. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak (örnek: blockchain, mining, staking, DeFi, NFT)
-3. Kripto para birimlerinin isimlerini değiştirme (örnek: Bitcoin, Ethereum, Solana)
-4. Çevirdiğin metni kısaltma veya özetleme - tam çeviri yap
-5. Akıcı ve doğal bir Türkçe kullan
-6. Her zaman JSON formatında dön
-
-JSON formatı:
-{
-  "title": "çevrilmiş başlık",
-  "content": "çevrilmiş içerik"
-}`
+          content: process.env.NEXT_PUBLIC_NEWS_TRANSLATION_PROMPT_TR || ""
         },
         {
           role: "user",

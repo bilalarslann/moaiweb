@@ -1061,6 +1061,15 @@ export default function AnalistMoai() {
               console.error('Watch-only accounts are not allowed');
               setHasToken(false);
               setIsWalletLoading(false);
+              // Add warning message
+              const warningMessage: Message = {
+                type: 'bot',
+                content: userLanguage === 'tr' ? 
+                  "⚠️ İzlenen (watch-only) hesaplar ile giriş yapamazsınız. Lütfen normal bir Phantom cüzdanı kullanın." :
+                  "⚠️ Watch-only accounts are not allowed. Please use a regular Phantom wallet.",
+                timestamp: Date.now()
+              };
+              setMessages(prev => [...prev, warningMessage]);
               // Disconnect the wallet
               await handleDisconnect(disconnect);
               return;
@@ -1308,7 +1317,7 @@ export default function AnalistMoai() {
       const languagePrompt = await callOpenAI([
         {
           role: "system",
-          content: `You are a language detector. Analyze the given text and return ONLY "tr" for Turkish or "en" for English in your response. Nothing else.`
+          content: process.env.NEXT_PUBLIC_LANGUAGE_DETECTOR_PROMPT_EN || "You are a language detector. Analyze the given text and return ONLY \"tr\" for Turkish or \"en\" for English in your response. Nothing else."
         },
         {
           role: "user",
@@ -1365,32 +1374,8 @@ export default function AnalistMoai() {
         {
           role: "system",
           content: detectedLanguage === 'tr' ? 
-            `Sen bir kripto analisti asistanısın. Kullanıcının sorusunu analiz et ve hangi tür analiz istediğini belirle.
-            
-            Soru tipleri:
-            1. Genel Analiz: "analiz et", "nasıl", "ne düşünüyorsun" gibi genel sorular
-            2. Fiyat Tahmini: "hedef", "ne kadar olur", "yükselir mi" gibi fiyat odaklı sorular
-            3. Teknik Analiz: "teknik", "göstergeler", "indikatör" gibi teknik analiz odaklı sorular
-            4. Piyasa Analizi: "piyasa", "market", "trend" gibi genel piyasa durumu odaklı sorular
-            
-            Sadece aşağıdaki formatlardan birini döndür:
-            - GENEL_ANALIZ
-            - FIYAT_TAHMINI
-            - TEKNIK_ANALIZ
-            - PIYASA_ANALIZI` :
-            `You are a crypto analyst assistant. Analyze the user's question and determine what type of analysis is needed.
-            
-            Question types:
-            1. General Analysis: general questions like "analyze", "how is", "what do you think"
-            2. Price Prediction: price-focused questions like "target", "how much", "will it rise"
-            3. Technical Analysis: technical analysis focused questions like "technical", "indicators"
-            4. Market Analysis: market condition focused questions like "market", "trend"
-            
-            Return only one of the following formats:
-            - GENERAL_ANALYSIS
-            - PRICE_PREDICTION
-            - TECHNICAL_ANALYSIS
-            - MARKET_ANALYSIS`
+            process.env.NEXT_PUBLIC_ANALYSIS_TYPE_DETECTOR_PROMPT_TR || "" :
+            process.env.NEXT_PUBLIC_ANALYSIS_TYPE_DETECTOR_PROMPT_EN || ""
         },
         {
           role: "user",
@@ -1405,38 +1390,8 @@ export default function AnalistMoai() {
         {
           role: 'system',
           content: detectedLanguage === 'tr' ? 
-            `Sen MOAI'sin - kripto piyasalarının en zeki teknik analisti. Analizini TAM OLARAK 3 PARAGRAFTA yap:
-
-            1. PARAGRAF: Fiyat hareketleri analizi. Fiyatın genel trendini ve momentum durumunu değerlendir. Fiyatın son dönemdeki hareketlerini ve önemli fiyat seviyelerini açıkla.
-
-            2. PARAGRAF: Teknik göstergeleri analiz et (RSI, MACD, BB, SMA'lar). Trend analizi yap ve hacim analizini değerlendir. Farklı periyotlardaki (20, 50, 200) hareketli ortalamaların konumlarını ve ne anlama geldiklerini açıkla.
-
-            3. PARAGRAF: Kullanıcının spesifik sorusunu cevapla. Eğer fiyat tahmini isteniyorsa, teknik göstergelere dayalı tahmin yap. Kısa ve orta vadeli hedefleri belirt.
-
-            ÖNEMLİ KURALLAR:
-            - Kesinlikle 3 paragraftan fazla yazma
-            - Her paragraf en fazla 4-5 cümle olsun
-            - Tüm sayısal değerleri **kalın** yaz
-            - Teknik terimleri doğal bir dilde açıkla
-            - Başlık veya liste kullanma, düz metin yaz
-
-            Not: Bu analiz eğitim amaçlıdır.` :
-            `You are MOAI - the smartest technical analyst in crypto markets. Present your analysis in EXACTLY 3 PARAGRAPHS:
-
-            1ST PARAGRAPH: Price action analysis. Evaluate the general trend and momentum state. Explain recent price movements and significant price levels.
-
-            2ND PARAGRAPH: Analyze technical indicators (RSI, MACD, BB, SMAs). Perform trend analysis and evaluate volume analysis. Explain the positions of different period moving averages (20, 50, 200) and what they mean.
-
-            3RD PARAGRAPH: Answer the user's specific question. If price prediction is requested, make a forecast based on technical indicators. Specify short and medium-term targets.
-
-            IMPORTANT RULES:
-            - Never write more than 3 paragraphs
-            - Each paragraph should be 4-5 sentences maximum
-            - Write all numerical values in **bold**
-            - Explain technical terms conversationally
-            - No headers or lists, just plain text
-
-            Note: This analysis is for educational purposes only.`
+            process.env.NEXT_PUBLIC_TECHNICAL_ANALYSIS_PROMPT_TR || "" :
+            process.env.NEXT_PUBLIC_TECHNICAL_ANALYSIS_PROMPT_EN || ""
         },
         ...conversationHistory,
         {
@@ -1481,6 +1436,31 @@ export default function AnalistMoai() {
   const handleConnect = async (walletName: string) => {
     try {
       if (walletName === 'phantom') {
+        // Check if Phantom is installed
+        if (!window.phantom?.solana) {
+          window.open('https://phantom.app', '_blank');
+          return;
+        }
+
+        // Check if it's a watch-only account before connecting
+        try {
+          const isWatchOnly = await window.phantom.solana._handleIsWatchOnly?.();
+          if (isWatchOnly) {
+            // Show warning message for watch-only accounts
+            const warningMessage: Message = {
+              type: 'bot',
+              content: userLanguage === 'tr' ? 
+                "⚠️ İzlenen (watch-only) hesaplar ile giriş yapamazsınız. Lütfen normal bir Phantom cüzdanı kullanın." :
+                "⚠️ Watch-only accounts are not allowed. Please use a regular Phantom wallet.",
+              timestamp: Date.now()
+            };
+            setMessages(prev => [...prev, warningMessage]);
+            return;
+          }
+        } catch (e) {
+          console.debug('Error checking watch-only status:', e);
+        }
+
         await connect();
       } else if (walletName === 'solflare') {
         // Solflare bağlantı işlemi
@@ -1501,6 +1481,15 @@ export default function AnalistMoai() {
       }
     } catch (error) {
       console.error('Wallet connection error:', error);
+      // Show error message
+      const errorMessage: Message = {
+        type: 'bot',
+        content: userLanguage === 'tr' ? 
+          "❌ Cüzdan bağlantısı sırasında bir hata oluştu. Lütfen tekrar deneyin." :
+          "❌ An error occurred during wallet connection. Please try again.",
+        timestamp: Date.now()
+      };
+      setMessages(prev => [...prev, errorMessage]);
     }
   };
 
