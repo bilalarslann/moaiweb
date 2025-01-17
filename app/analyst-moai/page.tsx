@@ -1012,7 +1012,7 @@ export default function AnalistMoai() {
     setCurrentPlaceholder(placeholders[userLanguage][Math.floor(Math.random() * placeholders[userLanguage].length)]);
 
     return () => clearInterval(interval);
-  }, [userLanguage]);
+  }, [userLanguage, placeholders, setCurrentPlaceholder]);
 
   // Click outside handler effect
   useEffect(() => {
@@ -1546,7 +1546,7 @@ export default function AnalistMoai() {
                   {message.coin ? (
                     <div className="flex items-center gap-2">
                       <span className="inline-flex items-center gap-1 bg-purple-900/60 px-2 py-0.5 rounded-lg text-purple-200">
-                        <img src={message.coin.thumb} alt={message.coin.symbol} className="w-4 h-4 rounded-full" />
+                        <Image src={message.coin.thumb} alt={message.coin.symbol} width={16} height={16} className="rounded-full" />
                         {message.coin.symbol}
                       </span>
                       <span>{message.content}</span>
@@ -1589,7 +1589,7 @@ export default function AnalistMoai() {
                                     {part}
                                     {i < arr.length - 1 && (
                                       <span className="inline-flex items-center gap-1 bg-purple-900/60 px-2 py-0.5 rounded-lg text-purple-200">
-                                        <img src={coin.thumb} alt={coin.symbol} className="w-4 h-4 rounded-full" />
+                                        <Image src={coin.thumb} alt={coin.symbol} width={16} height={16} className="rounded-full" />
                                         {coin.symbol}
                                       </span>
                                     )}
@@ -1637,7 +1637,7 @@ export default function AnalistMoai() {
                   hover:shadow-[0_0_15px_0] hover:shadow-purple-500/30 hover:border-purple-400/50 text-sm
                   flex items-center gap-2"
               >
-                <img src={suggestion.thumb} alt={suggestion.name} className="w-5 h-5 rounded-full" />
+                <Image src={suggestion.thumb} alt={suggestion.name} width={20} height={20} className="rounded-full" />
                 <span>{suggestion.symbol}</span>
               </button>
             ))}
@@ -1652,7 +1652,7 @@ export default function AnalistMoai() {
             <div className="flex-1 bg-gray-800/80 rounded-xl px-2 flex items-center gap-2 focus-within:ring-2 focus-within:ring-purple-500/50">
               {selectedCoin && (
                 <div className="flex items-center gap-2 bg-purple-500/20 px-2 py-1 rounded-lg m-1">
-                  <img src={selectedCoin.thumb} alt={selectedCoin.name} className="w-5 h-5 rounded-full" />
+                  <Image src={selectedCoin.thumb} alt={selectedCoin.name} width={20} height={20} className="rounded-full" />
                   <span className="text-purple-300">{selectedCoin.symbol}</span>
                   <button
                     type="button"
