@@ -21,6 +21,7 @@
 # Function bundle optimizations
 [functions."*"]
   included_files = []
+  excluded_files = ["**/*.test.ts", "**/*.spec.ts", "**/*.stories.tsx"]
   external_node_modules = [
     "@netlify/functions",
     "crypto-js",
@@ -35,5 +36,12 @@
     "express-rate-limit",
     "ioredis",
     "rate-limit-redis",
-    "@upstash/redis"
+    "@upstash/redis",
+    "next",
+    "react",
+    "react-dom",
+    "typescript",
+    "autoprefixer",
+    "postcss",
+    "tailwindcss"
   ] 
