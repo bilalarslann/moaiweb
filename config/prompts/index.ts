@@ -1,5 +1,6 @@
 import { encryptedPrompts } from './data';
-import CryptoJS from 'crypto-js';
+
+const CryptoJS = require('crypto-js');
 
 const ENCRYPTION_KEY = process.env.NEXT_PUBLIC_ENCRYPTION_KEY || 'default-key';
 
