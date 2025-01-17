@@ -41,9 +41,10 @@ type ChatMessage = {
 };
 
 // Add new function for OpenAI calls
-const callOpenAI = async (messages: any[], model: string = "gpt-3.5-turbo") => {
+const callOpenAI = async (messages: any[], model: string = "gpt-3.5-turbo", response_format?: { type: string }) => {
   try {
-    const response = await fetch('http://localhost:3005/api/openai/chat/completions', {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+    const response = await fetch(`${apiUrl}/api/openai/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -51,7 +52,8 @@ const callOpenAI = async (messages: any[], model: string = "gpt-3.5-turbo") => {
       },
       body: JSON.stringify({
         model: model,
-        messages: messages
+        messages: messages,
+        response_format: response_format
       }),
     });
 

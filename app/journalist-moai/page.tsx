@@ -101,8 +101,8 @@ type Message = {
 // Add new function for OpenAI calls
 const callOpenAI = async (messages: any[], model: string = "gpt-3.5-turbo", response_format?: { type: string }) => {
   try {
-    // Call through API Gateway using local path
-    const response = await fetch('http://localhost:3005/api/openai/chat/completions', {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+    const response = await fetch(`${apiUrl}/api/openai/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
