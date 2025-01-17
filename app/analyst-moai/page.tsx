@@ -159,10 +159,53 @@ interface ChartData {
     low: number;
     close: number;
   }>;
+<<<<<<< HEAD
   volumeProfile: Array<{
     price: number;
     volume: number;
   }>;
+=======
+  additional_market_data?: {
+    market_cap_rank?: number;
+    market_cap_change_24h_in_currency?: number;
+    price_change_percentage_1h_in_currency?: number;
+    price_change_percentage_24h_in_currency?: number;
+    price_change_percentage_7d_in_currency?: number;
+    price_change_percentage_14d_in_currency?: number;
+    price_change_percentage_30d_in_currency?: number;
+    price_change_percentage_60d_in_currency?: number;
+    price_change_percentage_200d_in_currency?: number;
+    price_change_percentage_1y_in_currency?: number;
+    total_value_locked?: number;
+    mcap_to_tvl_ratio?: number;
+    fdv_to_tvl_ratio?: number;
+    roi?: any;
+    fully_diluted_valuation?: number;
+    total_supply?: number;
+    max_supply?: number;
+    circulating_supply?: number;
+    last_updated?: string;
+  };
+  exchange_data?: {
+    number_of_exchanges: number;
+    top_exchanges: Array<{
+      name: string;
+      volume_24h: number;
+      trust_score: string;
+    }>;
+  } | null;
+  developer_data?: {
+    forks?: number;
+    stars?: number;
+    subscribers?: number;
+    total_issues?: number;
+    closed_issues?: number;
+    pull_requests_merged?: number;
+    pull_request_contributors?: number;
+    code_additions_4_weeks?: number;
+    code_deletions_4_weeks?: number;
+  } | null;
+>>>>>>> 966d7be (Initial commit)
 }
 
 interface StudyValues {
@@ -276,10 +319,80 @@ const TradingViewWidget = ({ symbol, interval = '240', onChartReady, isFullscree
           library_path: "https://s3.tradingview.com/tv.js",
           auto_save_delay: 30,
           debug: false,
+<<<<<<< HEAD
           studies_overrides: {
             "volume.volume.transparency": 50,
             "volume.volume.color.0": "rgba(255,0,0,0.5)",
             "volume.volume.color.1": "rgba(0,255,0,0.5)"
+=======
+          studies: [
+            // Essential Indicators
+            { id: "BB@tv-basicstudies", inputs: { length: 20, stdDev: 2 } },
+            { id: "RSI@tv-basicstudies", inputs: { length: 14 } },
+            { id: "MACD@tv-basicstudies" },
+            { id: "MASimple@tv-basicstudies", inputs: { length: 200 } },
+            { id: "Volume@tv-basicstudies" },
+            { id: "VWAP@tv-basicstudies" },
+            { id: "ElliottWave@tv-basicstudies" },
+            { id: "ZigZag@tv-basicstudies", inputs: { deviation: 5 } },
+            { id: "PivotPointsStandard@tv-basicstudies" }
+          ],
+          studies_overrides: {
+            // Volume Settings
+            "volume.volume.transparency": 50,
+            "volume.volume.color.0": "rgba(255,82,82,0.5)",
+            "volume.volume.color.1": "rgba(76,175,80,0.5)",
+            
+            // Bollinger Bands
+            "BB.basis.linewidth": 2,
+            "BB.upper.linewidth": 2,
+            "BB.lower.linewidth": 2,
+            
+            // RSI Settings
+            "RSI.plot.linewidth": 2,
+            "RSI.plot.color": "#7E57C2",
+            
+            // MACD Settings
+            "MACD.histogram.color.0": "#ef5350",
+            "MACD.histogram.color.1": "#26a69a",
+            "MACD.signal.color": "#ff9800",
+            "MACD.macd.color": "#2196f3",
+            
+            // Moving Average
+            "MASimple.plot.color": "#2196f3",
+            "MASimple.plot.linewidth": 2,
+            
+            // VWAP Settings
+            "VWAP.plot.color": "#FF6D00",
+            "VWAP.plot.linewidth": 2,
+            
+            // Elliott Wave Settings
+            "ElliottWave.wave.color": "#64B5F6",
+            "ElliottWave.wave.label.color": "#FFFFFF",
+            
+            // ZigZag Settings
+            "ZigZag.plot.linewidth": 2,
+            "ZigZag.plot.color": "#FFB74D",
+
+            // Pivot Points Settings
+            "PivotPointsStandard.color.r4": "#ef9a9a",
+            "PivotPointsStandard.color.r3": "#ef5350",
+            "PivotPointsStandard.color.r2": "#e57373",
+            "PivotPointsStandard.color.r1": "#ff8a80",
+            "PivotPointsStandard.color.p": "#ffb74d",
+            "PivotPointsStandard.color.s1": "#81c784",
+            "PivotPointsStandard.color.s2": "#66bb6a",
+            "PivotPointsStandard.color.s3": "#4caf50",
+            "PivotPointsStandard.color.s4": "#43a047",
+            "PivotPointsStandard.linewidth": 1,
+            "PivotPointsStandard.linestyle": 0
+          },
+          drawings: {
+            "auto_patterns": true,
+            "auto_trendlines": true,
+            "auto_fib": true,
+            "auto_harmonic": true
+>>>>>>> 966d7be (Initial commit)
           },
           disabled_features: [
             "use_localstorage_for_settings",
@@ -312,14 +425,20 @@ const TradingViewWidget = ({ symbol, interval = '240', onChartReady, isFullscree
             "chart_events",
             "header_saveload",
             "control_bar",
+<<<<<<< HEAD
             "edit_buttons_in_legend",
+=======
+>>>>>>> 966d7be (Initial commit)
             "context_menus",
             "popup_hints",
             "use_localstorage",
             "save_chart_properties",
             "save_study_templates",
             "display_market_status",
+<<<<<<< HEAD
             "edit_buttons_in_legend",
+=======
+>>>>>>> 966d7be (Initial commit)
             "timezone_menu",
             "screenshot_button",
             "show_logo_on_all_charts",
@@ -344,6 +463,7 @@ const TradingViewWidget = ({ symbol, interval = '240', onChartReady, isFullscree
             "paneProperties.horzGridProperties.color": "#363c4e",
             "symbolWatermarkProperties.transparency": 90,
             "scalesProperties.textColor": "#AAA",
+<<<<<<< HEAD
             "mainSeriesProperties.candleStyle.wickUpColor": '#336854',
             "mainSeriesProperties.candleStyle.wickDownColor": '#7f323f',
             "mainSeriesProperties.candleStyle.drawBorder": true,
@@ -351,6 +471,15 @@ const TradingViewWidget = ({ symbol, interval = '240', onChartReady, isFullscree
             "mainSeriesProperties.candleStyle.borderDownColor": '#7f323f',
             "mainSeriesProperties.candleStyle.upColor": '#336854',
             "mainSeriesProperties.candleStyle.downColor": '#7f323f',
+=======
+            "mainSeriesProperties.candleStyle.wickUpColor": '#26a69a',
+            "mainSeriesProperties.candleStyle.wickDownColor": '#ef5350',
+            "mainSeriesProperties.candleStyle.drawBorder": true,
+            "mainSeriesProperties.candleStyle.borderUpColor": '#26a69a',
+            "mainSeriesProperties.candleStyle.borderDownColor": '#ef5350',
+            "mainSeriesProperties.candleStyle.upColor": '#26a69a',
+            "mainSeriesProperties.candleStyle.downColor": '#ef5350',
+>>>>>>> 966d7be (Initial commit)
             "mainSeriesProperties.candleStyle.drawWick": true,
             "mainSeriesProperties.candleStyle.drawBody": true,
             "mainSeriesProperties.candleStyle.wickColorSource": "open",
@@ -587,8 +716,13 @@ const getChartData = async (symbol: string, selectedCoinId?: string): Promise<Ch
       return null;
     }
 
+<<<<<<< HEAD
     // Use the CoinGecko ID directly in the fetch requests
     const coinResponse = await fetch(`/api/coingecko?endpoint=coins/${coinId}&params=localization=false&tickers=true&market_data=true&community_data=false&developer_data=false&sparkline=false`, {
+=======
+    // Fetch detailed coin data
+    const coinResponse = await fetch(`/api/coingecko?endpoint=coins/${coinId}&params=localization=false&tickers=true&market_data=true&community_data=true&developer_data=true&sparkline=true`, {
+>>>>>>> 966d7be (Initial commit)
       method: 'GET',
       headers: createHeaders()
     });
@@ -599,8 +733,13 @@ const getChartData = async (symbol: string, selectedCoinId?: string): Promise<Ch
     }
     const coinData = await coinResponse.json();
 
+<<<<<<< HEAD
     // Get historical price data
     const historicalResponse = await fetch(`/api/coingecko?endpoint=coins/${coinId}/market_chart`, {
+=======
+    // Get historical price data with more granular data
+    const historicalResponse = await fetch(`/api/coingecko?endpoint=coins/${coinId}/market_chart&params=vs_currency=usd&days=365&interval=daily`, {
+>>>>>>> 966d7be (Initial commit)
       method: 'GET',
       headers: createHeaders()
     });
@@ -612,7 +751,11 @@ const getChartData = async (symbol: string, selectedCoinId?: string): Promise<Ch
     const historicalData = await historicalResponse.json();
 
     // Get OHLCV data
+<<<<<<< HEAD
     const ohlcResponse = await fetch(`/api/coingecko?endpoint=coins/${coinId}/ohlc`, {
+=======
+    const ohlcResponse = await fetch(`/api/coingecko?endpoint=coins/${coinId}/ohlc&params=vs_currency=usd&days=30`, {
+>>>>>>> 966d7be (Initial commit)
       method: 'GET',
       headers: createHeaders()
     });
@@ -630,8 +773,13 @@ const getChartData = async (symbol: string, selectedCoinId?: string): Promise<Ch
 
     // Process price data
     const prices = historicalData.prices.map((p: any) => p[1]);
+<<<<<<< HEAD
     const volumes = historicalData.total_volumes?.map((v: any) => v[1]) || Array(prices.length).fill(0);
     const marketCaps = historicalData.market_caps?.map((m: any) => m[1]) || Array(prices.length).fill(0);
+=======
+    const volumes = historicalData.total_volumes?.map((v: any) => v[1]) || [];
+    const marketCaps = historicalData.market_caps?.map((m: any) => m[1]) || [];
+>>>>>>> 966d7be (Initial commit)
     const currentPrice = prices[prices.length - 1];
 
     // Process OHLC data
@@ -659,13 +807,18 @@ const getChartData = async (symbol: string, selectedCoinId?: string): Promise<Ch
     const sma50 = prices.slice(-50).reduce((a: number, b: number) => a + b, 0) / 50;
     const sma200 = prices.slice(-200).reduce((a: number, b: number) => a + b, 0) / 200;
 
+<<<<<<< HEAD
     // Calculate Bollinger Bands with more precision
+=======
+    // Calculate Bollinger Bands
+>>>>>>> 966d7be (Initial commit)
     const bbPeriod = 20;
     const bbMultiplier = 2;
     const bbPrices = prices.slice(-bbPeriod);
     const bbSMA = bbPrices.reduce((a: number, b: number) => a + b, 0) / bbPeriod;
     const bbStdDev = Math.sqrt(bbPrices.reduce((sum: number, price: number) => sum + Math.pow(price - bbSMA, 2), 0) / bbPeriod);
 
+<<<<<<< HEAD
     // Calculate volume profile
     interface VolumeLevel {
       price: number;
@@ -703,16 +856,87 @@ const getChartData = async (symbol: string, selectedCoinId?: string): Promise<Ch
         upper: Number((bbSMA + bbMultiplier * bbStdDev).toFixed(5)),
         middle: Number(bbSMA.toFixed(5)),
         lower: Number((bbSMA - bbMultiplier * bbStdDev).toFixed(5))
+=======
+    // Get additional market data
+    const additionalMarketData = {
+      market_cap_rank: coinData.market_cap_rank,
+      market_cap_change_24h_in_currency: coinData.market_data?.market_cap_change_24h_in_currency?.usd,
+      price_change_percentage_1h_in_currency: coinData.market_data?.price_change_percentage_1h_in_currency?.usd,
+      price_change_percentage_24h_in_currency: coinData.market_data?.price_change_percentage_24h_in_currency?.usd,
+      price_change_percentage_7d_in_currency: coinData.market_data?.price_change_percentage_7d_in_currency?.usd,
+      price_change_percentage_14d_in_currency: coinData.market_data?.price_change_percentage_14d_in_currency?.usd,
+      price_change_percentage_30d_in_currency: coinData.market_data?.price_change_percentage_30d_in_currency?.usd,
+      price_change_percentage_60d_in_currency: coinData.market_data?.price_change_percentage_60d_in_currency?.usd,
+      price_change_percentage_200d_in_currency: coinData.market_data?.price_change_percentage_200d_in_currency?.usd,
+      price_change_percentage_1y_in_currency: coinData.market_data?.price_change_percentage_1y_in_currency?.usd,
+      total_value_locked: coinData.market_data?.total_value_locked,
+      mcap_to_tvl_ratio: coinData.market_data?.mcap_to_tvl_ratio,
+      fdv_to_tvl_ratio: coinData.market_data?.fdv_to_tvl_ratio,
+      roi: coinData.market_data?.roi,
+      fully_diluted_valuation: coinData.market_data?.fully_diluted_valuation?.usd,
+      total_supply: coinData.market_data?.total_supply,
+      max_supply: coinData.market_data?.max_supply,
+      circulating_supply: coinData.market_data?.circulating_supply,
+      last_updated: coinData.market_data?.last_updated
+    };
+
+    // Get exchange data
+    const exchangeData = coinData.tickers ? {
+      number_of_exchanges: coinData.tickers.length,
+      top_exchanges: coinData.tickers
+        .sort((a: any, b: any) => b.volume - a.volume)
+        .slice(0, 5)
+        .map((t: any) => ({
+          name: t.market.name,
+          volume_24h: t.volume,
+          trust_score: t.trust_score
+        }))
+    } : null;
+
+    // Get developer data if available
+    const developerData = coinData.developer_data ? {
+      forks: coinData.developer_data.forks,
+      stars: coinData.developer_data.stars,
+      subscribers: coinData.developer_data.subscribers,
+      total_issues: coinData.developer_data.total_issues,
+      closed_issues: coinData.developer_data.closed_issues,
+      pull_requests_merged: coinData.developer_data.pull_requests_merged,
+      pull_request_contributors: coinData.developer_data.pull_request_contributors,
+      code_additions_4_weeks: coinData.developer_data.code_additions_deletions_4_weeks?.additions,
+      code_deletions_4_weeks: coinData.developer_data.code_additions_deletions_4_weeks?.deletions
+    } : null;
+
+    return {
+      price: Number(currentPrice.toFixed(8)),
+      rsi: Number(rsi.toFixed(2)),
+      sma: {
+        sma20: Number(sma20.toFixed(8)),
+        sma50: Number(sma50.toFixed(8)),
+        sma200: Number(sma200.toFixed(8))
+      },
+      bb: {
+        upper: Number((bbSMA + bbMultiplier * bbStdDev).toFixed(8)),
+        middle: Number(bbSMA.toFixed(8)),
+        lower: Number((bbSMA - bbMultiplier * bbStdDev).toFixed(8))
+>>>>>>> 966d7be (Initial commit)
       },
       market_data: {
         price_change_24h: Number(coinData.market_data?.price_change_percentage_24h?.toFixed(2)) || 0,
         volume_24h: Number(coinData.market_data?.total_volume?.usd?.toFixed(0)) || 0,
         market_cap: Number(coinData.market_data?.market_cap?.usd?.toFixed(0)) || 0,
+<<<<<<< HEAD
         high_24h: Number(coinData.market_data?.high_24h?.usd?.toFixed(5)) || 0,
         low_24h: Number(coinData.market_data?.low_24h?.usd?.toFixed(5)) || 0,
         ath: Number(coinData.market_data?.ath?.usd?.toFixed(5)) || 0,
         ath_change_percentage: Number(coinData.market_data?.ath_change_percentage?.usd?.toFixed(2)) || 0,
         atl: Number(coinData.market_data?.atl?.usd?.toFixed(5)) || 0,
+=======
+        high_24h: Number(coinData.market_data?.high_24h?.usd?.toFixed(8)) || 0,
+        low_24h: Number(coinData.market_data?.low_24h?.usd?.toFixed(8)) || 0,
+        ath: Number(coinData.market_data?.ath?.usd?.toFixed(8)) || 0,
+        ath_change_percentage: Number(coinData.market_data?.ath_change_percentage?.usd?.toFixed(2)) || 0,
+        atl: Number(coinData.market_data?.atl?.usd?.toFixed(8)) || 0,
+>>>>>>> 966d7be (Initial commit)
         atl_change_percentage: Number(coinData.market_data?.atl_change_percentage?.usd?.toFixed(2)) || 0,
         price_change_percentage_7d: Number(coinData.market_data?.price_change_percentage_7d?.toFixed(2)) || 0,
         price_change_percentage_30d: Number(coinData.market_data?.price_change_percentage_30d?.toFixed(2)) || 0,
@@ -723,11 +947,16 @@ const getChartData = async (symbol: string, selectedCoinId?: string): Promise<Ch
       },
       trends: {
         volume_trend: volumes.slice(-7).map((v: number) => Number(v.toFixed(0))),
+<<<<<<< HEAD
         price_trend: prices.slice(-7).map((p: number) => Number(p.toFixed(5))),
+=======
+        price_trend: prices.slice(-7).map((p: number) => Number(p.toFixed(8))),
+>>>>>>> 966d7be (Initial commit)
         market_cap_trend: marketCaps.slice(-7).map((m: number) => Number(m.toFixed(0)))
       },
       ohlc: ohlc.slice(-30).map((candle: SeriesData) => ({
         time: candle.time,
+<<<<<<< HEAD
         open: Number(candle.open.toFixed(5)),
         high: Number(candle.high.toFixed(5)),
         low: Number(candle.low.toFixed(5)),
@@ -737,6 +966,16 @@ const getChartData = async (symbol: string, selectedCoinId?: string): Promise<Ch
         price: Number(level.price.toFixed(5)),
         volume: level.volume
       }))
+=======
+        open: Number(candle.open.toFixed(8)),
+        high: Number(candle.high.toFixed(8)),
+        low: Number(candle.low.toFixed(8)),
+        close: Number(candle.close.toFixed(8))
+      })),
+      additional_market_data: additionalMarketData,
+      exchange_data: exchangeData,
+      developer_data: developerData
+>>>>>>> 966d7be (Initial commit)
     };
   } catch (error) {
     console.error('Error fetching data from CoinGecko:', error);
