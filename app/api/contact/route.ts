@@ -5,20 +5,27 @@ export async function POST(req: Request) {
   try {
     const { name, email, subject, message } = await req.json();
 
+    const emailUser = process.env.EMAIL_USER;
+    const emailPass = process.env.EMAIL_PASS;
+
+    if (!emailUser || !emailPass) {
+      throw new Error('Email credentials are not configured');
+    }
+
     // Create transporter
     const transporter = nodemailer.createTransport({
       host: "smtp.gmail.com",
       port: 587,
       secure: false,
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        user: emailUser,
+        pass: emailPass,
       },
     });
 
     // Email content
     const mailOptions = {
-      from: process.env.EMAIL_USER,
+      from: emailUser,
       to: 'support@moaiagent.com',
       subject: `Support Request: ${subject}`,
       text: `
