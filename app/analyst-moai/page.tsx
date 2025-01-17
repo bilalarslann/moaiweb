@@ -355,7 +355,6 @@ const TradingViewWidget = ({ symbol, interval = '240', onChartReady, isFullscree
             "mainSeriesProperties.candleStyle.wickColorSource": "open",
             "mainSeriesProperties.showCountdown": false,
             "mainSeriesProperties.visible": true,
-            "mainSeriesProperties.showPriceLine": true,
             "mainSeriesProperties.priceLineWidth": 1,
             "mainSeriesProperties.lockScale": false,
             "mainSeriesProperties.minTick": "default",
