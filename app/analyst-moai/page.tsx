@@ -1053,6 +1053,23 @@ export default function AnalistMoai() {
       }
 
       try {
+        // Check if using Phantom and if it's a watch-only account
+        if (window.phantom?.solana) {
+          try {
+            const isWatchOnly = await window.phantom.solana._handleIsWatchOnly?.();
+            if (isWatchOnly) {
+              console.error('Watch-only accounts are not allowed');
+              setHasToken(false);
+              setIsWalletLoading(false);
+              // Disconnect the wallet
+              await handleDisconnect(disconnect);
+              return;
+            }
+          } catch (e) {
+            console.debug('Error checking watch-only status:', e);
+          }
+        }
+
         const connection = new Connection(SOLANA_RPC_URL);
         
         // Get all token accounts owned by the user
