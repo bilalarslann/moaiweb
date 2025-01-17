@@ -23,5 +23,17 @@
   included_files = []
   external_node_modules = [
     "@netlify/functions",
-    "crypto-js"
+    "crypto-js",
+    "@solana/web3.js",
+    "@solana/spl-token",
+    "@solana/wallet-adapter-base",
+    "@solana/wallet-adapter-react",
+    "@solana/wallet-adapter-react-ui",
+    "@solana/wallet-adapter-wallets",
+    "openai",
+    "express",
+    "express-rate-limit",
+    "ioredis",
+    "rate-limit-redis",
+    "@upstash/redis"
   ] 
