@@ -11,6 +11,22 @@ interface NewsItem {
   url: string;
 }
 
+interface RSSItem {
+  title: string[];
+  description: string[];
+  link: string[];
+}
+
+interface RSSChannel {
+  item: RSSItem[];
+}
+
+interface RSSResponse {
+  rss: {
+    channel: RSSChannel[];
+  };
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');
@@ -24,7 +40,7 @@ export async function GET(request: Request) {
     const response = await axios.get(`https://news.google.com/rss/search?q=${encodeURIComponent(query)}+crypto+when:7d&hl=en-US&gl=US&ceid=US:en`);
     
     // Parse XML response
-    const result = await parseXML(response.data);
+    const result = await parseXML(response.data) as RSSResponse;
     const items = result.rss.channel[0].item || [];
     
     const news: NewsItem[] = [];
