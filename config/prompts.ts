@@ -11,6 +11,10 @@ export const prompts = {
     en: `${process.env.PROMPT_JOURNALIST_SYSTEM_EN}\n\n${process.env.PROMPT_JOURNALIST_RULES_EN}`,
     tr: `${process.env.PROMPT_JOURNALIST_SYSTEM_TR}\n\n${process.env.PROMPT_JOURNALIST_RULES_TR}`
   },
+  suggestions: {
+    en: `${process.env.PROMPT_SUGGESTIONS_SYSTEM_EN}\n\n${process.env.PROMPT_SUGGESTIONS_RULES_EN}\n\n${process.env.PROMPT_SUGGESTIONS_FORMAT_EN}`,
+    tr: `${process.env.PROMPT_SUGGESTIONS_SYSTEM_TR}\n\n${process.env.PROMPT_SUGGESTIONS_RULES_TR}\n\n${process.env.PROMPT_SUGGESTIONS_FORMAT_TR}`
+  },
   translation: {
     tr: `${process.env.PROMPT_TRANSLATE_SYSTEM_TR}\n\n${process.env.PROMPT_TRANSLATE_RULES_TR}\n\n${process.env.PROMPT_TRANSLATE_FORMAT_TR}`
   },
