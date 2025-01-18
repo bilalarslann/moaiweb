@@ -25,8 +25,8 @@ yarn-debug.log*
 yarn-error.log*
 
 # local env files
-.env
 .env*.local
+.env
 api-gateway/.env
 
 # vercel
@@ -36,20 +36,5 @@ api-gateway/.env
 *.tsbuildinfo
 next-env.d.ts
 
-# IDE
-.vscode/
-.idea/
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
 # prompts
-prompts.json
 /config/prompts.json
-/prompts/prompts.json

@@ -1318,7 +1318,7 @@ export default function AnalistMoai() {
       const languagePrompt = await callOpenAI([
         {
           role: "system",
-          content: prompts.languageDetector.systemPrompt
+          content: prompts.languageDetector.en
         },
         {
           role: "user",
@@ -1329,88 +1329,133 @@ export default function AnalistMoai() {
       const detectedLanguage = languagePrompt.trim().toLowerCase() as 'en' | 'tr';
       setUserLanguage(detectedLanguage);
 
-      // Extract coin symbol if no coin is selected
-      const coinSymbol = selectedCoin ? selectedCoin.symbol : extractCoinSymbol(userInput);
-      
-      if (!selectedCoin && !coinSymbol) {
-        const noCoinMessage: Message = {
-          type: 'bot',
-          content: detectedLanguage === 'tr'
-            ? "Mesajınızda geçerli bir coin sembolü bulamadım. Lütfen analiz etmek istediğiniz coini belirtin."
-            : "I couldn't find a valid coin symbol in your message. Please specify which coin you'd like me to analyze.",
-          timestamp: Date.now()
-        };
-        setMessages(prev => [...prev, noCoinMessage]);
-        setIsMessageLoading(false);
-        return;
-      }
-
-      // Get TradingView symbol for chart
-      const formattedSymbol = coinSymbol ? await getFormattedSymbol(coinSymbol) : '';
-      
-      // Only show chart if it's a valid TradingView symbol
-      if (formattedSymbol && !formattedSymbol.includes('INVALID')) {
-        const newBotMessage: Message = {
-          type: 'bot',
-          content: '',
-          chart: {
-            symbol: formattedSymbol
+      // Check for coin analysis request
+      if (isRequestingCoinAnalysis(userInput)) {
+        // Get analysis type
+        const analysisType = await callOpenAI([
+          {
+            role: "system",
+            content: detectedLanguage === 'tr' ? 
+              prompts.analyst.tr :
+              prompts.analyst.en
           },
+          {
+            role: "user",
+            content: userInput
+          }
+        ], "gpt-3.5-turbo");
+
+        // Get chart data
+        const chartData = await getChartData(selectedCoin?.symbol || '');
+
+        // Get technical analysis
+        const analysis = await callOpenAI([
+          {
+            role: 'system',
+            content: detectedLanguage === 'tr' ? 
+              prompts.technicalAnalysis.tr :
+              prompts.technicalAnalysis.en
+          },
+          ...messages.map(msg => ({
+            role: msg.type === 'user' ? 'user' as const : 'assistant' as const,
+            content: msg.content
+          })),
+          {
+            role: 'user',
+            content: `${userInput}\n\nChart Data: ${JSON.stringify(chartData, null, 2)}`
+          }
+        ], "gpt-4-turbo-preview");
+
+        const analysisMessage: Message = {
+          type: 'bot',
+          content: analysis,
           timestamp: Date.now()
         };
-        setMessages(prev => [...prev, newBotMessage]);
+        setMessages(prev => [...prev, analysisMessage]);
+      } else {
+        // Extract coin symbol if no coin is selected
+        const coinSymbol = selectedCoin ? selectedCoin.symbol : extractCoinSymbol(userInput);
+        
+        if (!selectedCoin && !coinSymbol) {
+          const noCoinMessage: Message = {
+            type: 'bot',
+            content: detectedLanguage === 'tr'
+              ? "Mesajınızda geçerli bir coin sembolü bulamadım. Lütfen analiz etmek istediğiniz coini belirtin."
+              : "I couldn't find a valid coin symbol in your message. Please specify which coin you'd like me to analyze.",
+            timestamp: Date.now()
+          };
+          setMessages(prev => [...prev, noCoinMessage]);
+          setIsMessageLoading(false);
+          return;
+        }
+
+        // Get TradingView symbol for chart
+        const formattedSymbol = coinSymbol ? await getFormattedSymbol(coinSymbol) : '';
+        
+        // Only show chart if it's a valid TradingView symbol
+        if (formattedSymbol && !formattedSymbol.includes('INVALID')) {
+          const newBotMessage: Message = {
+            type: 'bot',
+            content: '',
+            chart: {
+              symbol: formattedSymbol
+            },
+            timestamp: Date.now()
+          };
+          setMessages(prev => [...prev, newBotMessage]);
+        }
+
+        // Get chart data using selected coin ID if available
+        const chartData = await getChartData(coinSymbol || '', selectedCoin?.id);
+
+        // Get previous conversation context
+        const conversationHistory = messages.map(msg => ({
+          role: msg.type === 'user' ? 'user' as const : 'assistant' as const,
+          content: msg.content
+        }));
+
+        // Analyze the user's input to determine the type of analysis needed
+        const analysisTypePrompt = await callOpenAI([
+          {
+            role: "system",
+            content: detectedLanguage === 'tr' ? 
+              prompts.analyst.tr.questionAnalysisPrompt :
+              prompts.analyst.en.questionAnalysisPrompt
+          },
+          {
+            role: "user",
+            content: userInput
+          }
+        ]);
+
+        const analysisTypeResult = analysisTypePrompt.trim() || "GENERAL_ANALYSIS";
+
+        // Send the analysis
+        const analysisPrompt = await callOpenAI([
+          {
+            role: 'system',
+            content: detectedLanguage === 'tr' ? 
+              prompts.analyst.tr.analysisPrompt :
+              prompts.analyst.en.analysisPrompt
+          },
+          ...conversationHistory,
+          {
+            role: 'user',
+            content: `Analyze ${coinSymbol} with the following data: ${JSON.stringify(chartData)}
+            User's specific question: ${userInput || 'general analysis'}`
+          }
+        ], "gpt-4-turbo-preview");
+
+        const botResponse = analysisPrompt || 
+          (detectedLanguage === 'tr' ? "Üzgünüm, analiz yaparken bir hata oluştu." : "Sorry, an error occurred during analysis.");
+
+        const analysisMessage: Message = {
+          type: 'bot',
+          content: botResponse,
+          timestamp: Date.now()
+        };
+        setMessages(prev => [...prev, analysisMessage]);
       }
-
-      // Get chart data using selected coin ID if available
-      const chartData = await getChartData(coinSymbol || '', selectedCoin?.id);
-
-      // Get previous conversation context
-      const conversationHistory = messages.map(msg => ({
-        role: msg.type === 'user' ? 'user' as const : 'assistant' as const,
-        content: msg.content
-      }));
-
-      // Analyze the user's input to determine the type of analysis needed
-      const analysisTypePrompt = await callOpenAI([
-        {
-          role: "system",
-          content: detectedLanguage === 'tr' ? 
-            prompts.analyst.tr.questionAnalysisPrompt :
-            prompts.analyst.en.questionAnalysisPrompt
-        },
-        {
-          role: "user",
-          content: userInput
-        }
-      ]);
-
-      const analysisTypeResult = analysisTypePrompt.trim() || "GENERAL_ANALYSIS";
-
-      // Send the analysis
-      const analysisPrompt = await callOpenAI([
-        {
-          role: 'system',
-          content: detectedLanguage === 'tr' ? 
-            prompts.analyst.tr.analysisPrompt :
-            prompts.analyst.en.analysisPrompt
-        },
-        ...conversationHistory,
-        {
-          role: 'user',
-          content: `Analyze ${coinSymbol} with the following data: ${JSON.stringify(chartData)}
-          User's specific question: ${userInput || 'general analysis'}`
-        }
-      ], "gpt-4-turbo-preview");
-
-      const botResponse = analysisPrompt || 
-        (detectedLanguage === 'tr' ? "Üzgünüm, analiz yaparken bir hata oluştu." : "Sorry, an error occurred during analysis.");
-
-      const analysisMessage: Message = {
-        type: 'bot',
-        content: botResponse,
-        timestamp: Date.now()
-      };
-      setMessages(prev => [...prev, analysisMessage]);
     } catch (error) {
       console.error('Error:', error);
       const errorMessage: Message = {
