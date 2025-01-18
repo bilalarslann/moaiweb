@@ -1,5 +1,5 @@
 [build]
-  command = "next build"
+  command = "cp config/prompts.template.json config/prompts.json && next build"
   publish = ".next"
 
 [build.environment]
