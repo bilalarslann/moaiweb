@@ -12,16 +12,7 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["@netlify/functions"]
-
-[[edge_functions]]
-  function = "api/*"
-  path = "/api/*"
-
-# Function bundle optimizations
-[functions."*"]
   included_files = []
-  excluded_files = ["**/*.test.ts", "**/*.spec.ts", "**/*.stories.tsx"]
   external_node_modules = [
     "@netlify/functions",
     "crypto-js",
@@ -31,17 +22,40 @@
     "@solana/wallet-adapter-react",
     "@solana/wallet-adapter-react-ui",
     "@solana/wallet-adapter-wallets",
-    "openai",
-    "express",
-    "express-rate-limit",
-    "ioredis",
-    "rate-limit-redis",
-    "@upstash/redis",
-    "next",
-    "react",
-    "react-dom",
-    "typescript",
-    "autoprefixer",
-    "postcss",
-    "tailwindcss"
-  ] 
+    "openai"
+  ]
+
+[[edge_functions]]
+  function = "api/*"
+  path = "/api/*"
+
+# Split dependencies between edge functions and regular functions
+[functions."api/openai/*"]
+  external_node_modules = ["openai"]
+
+[functions."api/coingecko/*"]
+  external_node_modules = ["node-fetch"]
+
+[functions."api/solana/*"]
+  external_node_modules = [
+    "@solana/web3.js",
+    "@solana/spl-token"
+  ]
+
+# Exclude test and development files
+[build.processing]
+  skip_processing = false
+
+[build.processing.css]
+  bundle = true
+  minify = true
+
+[build.processing.js]
+  bundle = true
+  minify = true
+
+[build.processing.html]
+  pretty_urls = true
+
+[build.processing.images]
+  compress = true 
