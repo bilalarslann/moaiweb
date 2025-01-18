@@ -27,7 +27,6 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
-api-gateway/.env
 
 # vercel
 .vercel
@@ -37,4 +36,5 @@ api-gateway/.env
 next-env.d.ts
 
 # prompts
+prompts.json
 /config/prompts.json
