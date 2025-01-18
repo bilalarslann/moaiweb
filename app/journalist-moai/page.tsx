@@ -11,79 +11,11 @@ import { prompts } from '@/config/prompts';
 const MOAI_TOKEN_ADDRESS = '2GbE1pq8GiwpHhdGWKUBLXJfBKvKLoNWe1E4KPtbED2M';
 const SOLANA_RPC_URL = 'https://solana-mainnet.rpc.extrnode.com/a6f9fc24-29e2-43fb-8f5c-de216933db71';
 
-const SUGGESTIONS_PROMPT_EN = `Suggest 3 different news searches related to the given term and return in JSON format.
-                  
-Important rules:
-1. First suggestion should always be "More [term] news"
-2. Other suggestions should be different aspects of the same topic
-3. Keep it very short and clear (2-4 words)
-4. Write only as news searches
-
-Example - for "bitcoin":
-{
-  "suggestions": [
-    "More bitcoin news",
-    "Bitcoin regulation news",
-    "Bitcoin ETF news"
-  ]
-}
-
-Example - for "AI":
-{
-  "suggestions": [
-    "More AI news",
-    "AI security news",
-    "AI company news"
-  ]
-}
-
-Return response in JSON format.`;
-
-const SUGGESTIONS_PROMPT_TR = `Verilen terimle ilgili 3 farklı haber araması öner ve JSON formatında dön.
-                  
-Önemli kurallar:
-1. İlk öneri her zaman "Daha fazla [terim] haberi" olsun
-2. Diğer öneriler aynı konuyla ilgili farklı açılardan haberler olsun
-3. Çok kısa ve net olsun (2-4 kelime)
-4. Sadece haber araması olacak şekilde yaz
-
-Örnek - "bitcoin" için:
-{
-  "suggestions": [
-    "Daha fazla bitcoin haberi",
-    "Bitcoin regülasyon haberleri",
-    "Bitcoin ETF haberleri"
-  ]
-}
-
-Örnek - "yapay zeka" için:
-{
-  "suggestions": [
-    "Daha fazla yapay zeka haberi",
-    "Yapay zeka güvenlik haberleri",
-    "Yapay zeka şirket haberleri"
-  ]
-}
-
-Cevabı JSON formatında dön.`;
-
-const TRANSLATION_PROMPT_EN = `You are a professional translator and crypto news editor. Keep the news in English but summarize if needed. Keep technical terms and cryptocurrency names unchanged.
-
-Return in JSON format:
-{
-  "title": "title",
-  "content": "content",
-  "isTranslated": false
-}`;
-
-const TRANSLATION_PROMPT_TR = `Sen profesyonel bir çevirmen ve kripto haber editörüsün. İngilizce haberleri Türkçe'ye çevir ve özetle. Teknik terimleri ve kripto para isimlerini olduğu gibi bırak.
-
-JSON formatında dön:
-{
-  "title": "çevrilmiş başlık",
-  "content": "çevrilmiş içerik",
-  "isTranslated": true
-}`;
+// Remove these constant prompts as they are now in prompts.json
+const SUGGESTIONS_PROMPT_EN = '';
+const SUGGESTIONS_PROMPT_TR = '';
+const TRANSLATION_PROMPT_EN = '';
+const TRANSLATION_PROMPT_TR = '';
 
 const handleDisconnect = async (disconnect: () => Promise<void>) => {
   try {
@@ -547,8 +479,8 @@ export default function GazeticiMoai() {
         }
       ]);
 
-      const detectedLanguage = languagePrompt.trim().toLowerCase() as 'en' | 'tr';
-      setUserLanguage(detectedLanguage);
+      const userLanguage = languagePrompt.trim().toLowerCase() as 'en' | 'tr';
+      setUserLanguage(userLanguage);
 
       // Check for news-related keywords
       if (isRequestingNews(userMessage)) {
@@ -565,7 +497,7 @@ export default function GazeticiMoai() {
             const summary = await callOpenAI([
               {
                 role: "system",
-                content: detectedLanguage === 'tr' ?
+                content: userLanguage === 'tr' ?
                   prompts.newsEditor.tr :
                   prompts.newsEditor.en
               },
@@ -582,7 +514,7 @@ export default function GazeticiMoai() {
           } else {
             setMessages(prev => [...prev, {
               type: 'bot',
-              content: detectedLanguage === 'tr' ?
+              content: userLanguage === 'tr' ?
                 'Üzgünüm, bu konu hakkında güncel haber bulamadım.' :
                 'Sorry, I could not find any recent news on this topic.'
             }]);
@@ -591,7 +523,7 @@ export default function GazeticiMoai() {
           console.error('Error fetching news:', error);
           setMessages(prev => [...prev, {
             type: 'bot',
-            content: detectedLanguage === 'tr' ?
+            content: userLanguage === 'tr' ?
               'Üzgünüm, haberleri getirirken bir hata oluştu.' :
               'Sorry, there was an error fetching the news.'
           }]);
@@ -601,7 +533,7 @@ export default function GazeticiMoai() {
         const completion = await callOpenAI([
           {
             role: "system",
-            content: detectedLanguage === 'tr' ?
+            content: userLanguage === 'tr' ?
               prompts.journalist.tr :
               prompts.journalist.en
           },
@@ -616,7 +548,7 @@ export default function GazeticiMoai() {
         setMessages(prev => [...prev, {
           type: 'bot',
           content: botResponse + "\n\n⚠️ " + 
-            (detectedLanguage === 'tr' ?
+            (userLanguage === 'tr' ?
               "Bu bilgiler sadece eğitim amaçlıdır, yatırım tavsiyesi değildir." :
               "This information is for educational purposes only, not investment advice.")
         }]);

@@ -10,6 +10,7 @@ import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { AccountLayout } from '@solana/spl-token';
 import OpenAI from 'openai';
 import { validateCoinSymbol } from '@/utils/validation';
+import { prompts } from '@/config/prompts';
 
 // Add TradingView and Phantom types
 declare global {
@@ -1317,7 +1318,7 @@ export default function AnalistMoai() {
       const languagePrompt = await callOpenAI([
         {
           role: "system",
-          content: process.env.NEXT_PUBLIC_LANGUAGE_DETECTOR_PROMPT_EN || "You are a language detector. Analyze the given text and return ONLY \"tr\" for Turkish or \"en\" for English in your response. Nothing else."
+          content: prompts.languageDetector.systemPrompt
         },
         {
           role: "user",
@@ -1374,8 +1375,8 @@ export default function AnalistMoai() {
         {
           role: "system",
           content: detectedLanguage === 'tr' ? 
-            process.env.NEXT_PUBLIC_ANALYSIS_TYPE_DETECTOR_PROMPT_TR || "" :
-            process.env.NEXT_PUBLIC_ANALYSIS_TYPE_DETECTOR_PROMPT_EN || ""
+            prompts.analyst.tr.questionAnalysisPrompt :
+            prompts.analyst.en.questionAnalysisPrompt
         },
         {
           role: "user",
@@ -1390,8 +1391,8 @@ export default function AnalistMoai() {
         {
           role: 'system',
           content: detectedLanguage === 'tr' ? 
-            process.env.NEXT_PUBLIC_TECHNICAL_ANALYSIS_PROMPT_TR || "" :
-            process.env.NEXT_PUBLIC_TECHNICAL_ANALYSIS_PROMPT_EN || ""
+            prompts.analyst.tr.analysisPrompt :
+            prompts.analyst.en.analysisPrompt
         },
         ...conversationHistory,
         {

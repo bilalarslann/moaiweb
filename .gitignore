@@ -48,3 +48,8 @@ next-env.d.ts
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# prompts
+prompts.json
+/config/prompts.json
+/prompts/prompts.json
