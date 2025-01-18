@@ -5,41 +5,22 @@
 [build.environment]
   NEXT_TELEMETRY_DISABLED = "1"
   NODE_VERSION = "18"
-  NEXT_USE_NETLIFY_EDGE = "1"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["@netlify/functions"]
 
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/api/:splat"
-  status = 200
+[functions."openai"]
+  external_node_modules = ["openai"]
+  included_files = ["config/prompts.json"]
 
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+[functions."coingecko"]
+  external_node_modules = ["node-fetch"]
 
-[build.processing]
-  skip_processing = false
-
-[build.processing.css]
-  bundle = true
-  minify = true
-
-[build.processing.js]
-  bundle = true
-  minify = true
-
-[build.processing.html]
-  pretty_urls = true
-
-[build.processing.images]
-  compress = true
+[functions."solana"]
+  external_node_modules = ["@solana/web3.js", "@solana/spl-token"]
 
 # Cache settings
 [[headers]]
