@@ -13,36 +13,28 @@
 [functions]
   node_bundler = "esbuild"
   included_files = []
-  external_node_modules = [
-    "@netlify/functions",
-    "crypto-js",
-    "@solana/web3.js",
-    "@solana/spl-token",
-    "@solana/wallet-adapter-base",
-    "@solana/wallet-adapter-react",
-    "@solana/wallet-adapter-react-ui",
-    "@solana/wallet-adapter-wallets",
-    "openai"
-  ]
+  external_node_modules = ["@netlify/functions"]
 
 [[edge_functions]]
   function = "api/*"
   path = "/api/*"
 
-# Split dependencies between edge functions and regular functions
+[[edge_functions]]
+  function = "app/*"
+  path = "/app/*"
+
+# Function-specific configurations
 [functions."api/openai/*"]
   external_node_modules = ["openai"]
+  included_files = ["config/prompts.json"]
 
 [functions."api/coingecko/*"]
   external_node_modules = ["node-fetch"]
 
 [functions."api/solana/*"]
-  external_node_modules = [
-    "@solana/web3.js",
-    "@solana/spl-token"
-  ]
+  external_node_modules = ["@solana/web3.js", "@solana/spl-token"]
 
-# Exclude test and development files
+# Exclude development files
 [build.processing]
   skip_processing = false
 
@@ -58,4 +50,20 @@
   pretty_urls = true
 
 [build.processing.images]
-  compress = true 
+  compress = true
+
+# Cache settings
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable" 
