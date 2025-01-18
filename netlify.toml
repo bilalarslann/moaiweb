@@ -5,21 +5,29 @@
 [build.environment]
   NEXT_TELEMETRY_DISABLED = "1"
   NODE_VERSION = "18"
+  NEXT_DISABLE_SSR = "1"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+  [plugins.inputs]
+    disableServerlessLambdas = true
 
 [functions]
   node_bundler = "esbuild"
+  included_files = []
+  external_node_modules = ["@netlify/functions"]
 
-[functions."openai"]
+[functions.openai]
+  directory = "netlify/functions/openai"
   external_node_modules = ["openai"]
   included_files = ["config/prompts.json"]
 
-[functions."coingecko"]
+[functions.coingecko]
+  directory = "netlify/functions/coingecko"
   external_node_modules = ["node-fetch"]
 
-[functions."solana"]
+[functions.solana]
+  directory = "netlify/functions/solana"
   external_node_modules = ["@solana/web3.js", "@solana/spl-token"]
 
 # Cache settings
