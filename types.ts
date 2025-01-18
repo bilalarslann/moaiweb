@@ -20,8 +20,14 @@ export interface Prompts {
     tr: string;
   };
   analyst: {
-    en: string;
-    tr: string;
+    en: {
+      questionAnalysisPrompt: string;
+      analysisPrompt: string;
+    };
+    tr: {
+      questionAnalysisPrompt: string;
+      analysisPrompt: string;
+    };
   };
   technicalAnalysis: {
     en: string;

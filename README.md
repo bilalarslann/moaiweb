@@ -1,92 +1,39 @@
-# MOAI AI Assistant Platform
+# MOAI Web
 
-MOAI is an AI-powered platform featuring multiple specialized assistants for cryptocurrency analysis and news tracking.
+## Setup
 
-## Features
+1. Install dependencies:
+```bash
+npm install
+```
 
-- **Journalist MOAI**: Real-time crypto news aggregator and analyzer
-- **Analyst MOAI**: Technical analysis and price prediction assistant
-- **Secure API Gateway**: Rate-limited and protected API proxy
-- **TradingView Integration**: Real-time charts and technical analysis tools
-- **Multi-language Support**: English and Turkish language support
-- **Token-gated Access**: Exclusive features for MOAI token holders
+2. Set up environment variables:
+- Copy `.env.example` to `.env`
+- Fill in the required environment variables
 
-## Tech Stack
+3. Set up prompts:
+- Copy `config/prompts.template.json` to `config/prompts.json`
+- Customize the prompts in `prompts.json` as needed
+- Note: `prompts.json` is gitignored to keep your prompts private
 
-- Next.js 14
-- TypeScript
-- Express.js
-- OpenAI API
-- CoinGecko API
-- TradingView Widget
-- Solana Web3.js
-
-## Prerequisites
-
-- Node.js >= 18
-- NPM or Yarn
-- Solana Wallet (Phantom or Solflare)
+4. Run the development server:
+```bash
+npm run dev
+```
 
 ## Environment Variables
 
-Create `.env` files in both root and api-gateway directories:
+Required environment variables:
+- `NEXT_PUBLIC_OPENAI_API_KEY`: Your OpenAI API key
+- `NEXT_PUBLIC_COINGECKO_API_KEY`: Your CoinGecko API key
+- Other variables as specified in `.env.example`
 
-Root `.env`:
-```env
-NEXT_PUBLIC_TRADINGVIEW_SCRIPT_HASH=your_hash
-```
+## Project Structure
 
-API Gateway `.env`:
-```env
-PORT=3005
-ALLOWED_ORIGINS=http://localhost:3000
-OPENAI_API_KEY=your_openai_key
-```
-
-## Installation
-
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/moai.git
-cd moai
-```
-
-2. Install dependencies:
-```bash
-# Install frontend dependencies
-npm install
-
-# Install API Gateway dependencies
-cd api-gateway
-npm install
-```
-
-3. Start the development servers:
-```bash
-# Start API Gateway (in api-gateway directory)
-npm run dev
-
-# Start Next.js frontend (in root directory)
-npm run dev
-```
-
-4. Open http://localhost:3000 in your browser
-
-## Security Features
-
-- API Key encryption and rotation
-- Rate limiting
-- CORS protection
-- XSS prevention
-- Input validation
-- JWT authentication
-- Security headers
-- Origin validation
-
-## Deployment
-
-The project is configured for deployment on Netlify with environment variables set in the Netlify dashboard.
-
-## License
-
-MIT License - see LICENSE file for details
+- `app/`: Next.js app directory
+  - `analyst-moai/`: Analyst MOAI page
+  - `journalist-moai/`: Journalist MOAI page
+- `config/`: Configuration files
+  - `prompts.template.json`: Template for AI prompts
+  - `prompts.json`: Your customized prompts (gitignored)
+- `types/`: TypeScript type definitions
