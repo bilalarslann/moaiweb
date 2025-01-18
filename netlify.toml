@@ -11,13 +11,20 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = [
-    "@netlify/functions",
-    "openai",
-    "node-fetch",
-    "@solana/web3.js",
-    "@solana/spl-token"
-  ]
+  included_files = []
+
+[functions."api/openai/*"]
+  external_node_modules = ["openai"]
+  included_files = ["config/prompts.json"]
+
+[functions."api/coingecko/*"]
+  external_node_modules = ["node-fetch"]
+
+[functions."api/solana/*"]
+  external_node_modules = ["@solana/web3.js", "@solana/spl-token"]
+
+[functions."*"]
+  external_node_modules = ["@netlify/functions"]
 
 # Cache settings
 [[headers]]
