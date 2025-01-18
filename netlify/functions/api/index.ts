@@ -1,26 +1,29 @@
-import { Handler } from '@netlify/functions';
+import { Handler, HandlerEvent, HandlerContext } from '@netlify/functions';
 
-export const handler: Handler = async (event, context) => {
+export const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   const path = event.path.replace('/.netlify/functions/api/', '');
   const segments = path.split('/').filter(Boolean);
 
   try {
     // Route the request to the appropriate handler
     switch (segments[0]) {
-      case 'openai':
-        // Import OpenAI handler dynamically
+      case 'openai': {
         const { handler: openaiHandler } = await import('./openai');
-        return openaiHandler(event, context);
+        const response = await openaiHandler(event, context);
+        return response || { statusCode: 500, body: JSON.stringify({ error: 'No response from handler' }) };
+      }
       
-      case 'coingecko':
-        // Import CoinGecko handler dynamically
+      case 'coingecko': {
         const { handler: coingeckoHandler } = await import('./coingecko');
-        return coingeckoHandler(event, context);
+        const response = await coingeckoHandler(event, context);
+        return response || { statusCode: 500, body: JSON.stringify({ error: 'No response from handler' }) };
+      }
       
-      case 'solana':
-        // Import Solana handler dynamically
+      case 'solana': {
         const { handler: solanaHandler } = await import('./solana');
-        return solanaHandler(event, context);
+        const response = await solanaHandler(event, context);
+        return response || { statusCode: 500, body: JSON.stringify({ error: 'No response from handler' }) };
+      }
       
       default:
         return {

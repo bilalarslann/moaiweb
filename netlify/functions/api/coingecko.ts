@@ -1,9 +1,9 @@
-import { Handler } from '@netlify/functions';
+import { Handler, HandlerEvent, HandlerContext } from '@netlify/functions';
 import fetch from 'node-fetch';
 
 const COINGECKO_API_URL = 'https://api.coingecko.com/api/v3';
 
-export const handler: Handler = async (event, context) => {
+export const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   if (event.httpMethod !== 'GET') {
     return {
       statusCode: 405,

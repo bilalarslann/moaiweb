@@ -1,13 +1,11 @@
-import { Handler } from '@netlify/functions';
-import { Configuration, OpenAIApi } from 'openai';
+import { Handler, HandlerEvent, HandlerContext } from '@netlify/functions';
+import OpenAI from 'openai';
 
-const configuration = new Configuration({
+const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const openai = new OpenAIApi(configuration);
-
-export const handler: Handler = async (event, context) => {
+export const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
@@ -19,14 +17,14 @@ export const handler: Handler = async (event, context) => {
     const body = JSON.parse(event.body || '{}');
     const { messages } = body;
 
-    const response = await openai.createChatCompletion({
+    const response = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages,
     });
 
     return {
       statusCode: 200,
-      body: JSON.stringify(response.data),
+      body: JSON.stringify(response),
     };
   } catch (error) {
     console.error('OpenAI Error:', error);

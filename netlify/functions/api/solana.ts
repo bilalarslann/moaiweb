@@ -1,10 +1,10 @@
-import { Handler } from '@netlify/functions';
+import { Handler, HandlerEvent, HandlerContext } from '@netlify/functions';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { getAccount } from '@solana/spl-token';
 
 const connection = new Connection('https://api.mainnet-beta.solana.com');
 
-export const handler: Handler = async (event, context) => {
+export const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   if (event.httpMethod !== 'GET') {
     return {
       statusCode: 405,
