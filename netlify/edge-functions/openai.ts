@@ -1,10 +1,6 @@
 import { Context } from '@netlify/edge-functions';
 import OpenAI from 'openai';
 
-const openai = new OpenAI({
-  apiKey: Deno.env.get('OPENAI_API_KEY'),
-});
-
 export default async (request: Request, context: Context) => {
   if (request.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
@@ -12,6 +8,10 @@ export default async (request: Request, context: Context) => {
       headers: { 'Content-Type': 'application/json' },
     });
   }
+
+  const openai = new OpenAI({
+    apiKey: context.env.OPENAI_API_KEY,
+  });
 
   try {
     const body = await request.json();
@@ -28,7 +28,7 @@ export default async (request: Request, context: Context) => {
     });
   } catch (error) {
     console.error('OpenAI Error:', error);
-    return new Response(JSON.stringify({ error: 'OpenAI API Error' }), {
+    return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
