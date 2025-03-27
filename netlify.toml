@@ -1,6 +1,7 @@
 [build]
   command = "cp config/prompts.template.json config/prompts.json && next build"
   publish = ".next"
+  functions = "netlify/functions"
 
 [build.environment]
   NEXT_TELEMETRY_DISABLED = "1"
@@ -23,4 +24,7 @@
 [[headers]]
   for = "/_next/static/*"
   [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable" 
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[functions]
+  node_bundler = "esbuild" 
