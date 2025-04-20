@@ -12,6 +12,8 @@ export default function Home() {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [glowValues, setGlowValues] = useState({ size: 15, opacity: 0.15 });
+  const [showAd, setShowAd] = useState(true);
+  const [buildingProgress, setBuildingProgress] = useState(0);
   const requestRef = useRef<number>();
   const previousTimeRef = useRef<number>();
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
@@ -125,6 +127,25 @@ export default function Home() {
     setIsMoreOpen(false);
   };
 
+  // Building animation effect
+  useEffect(() => {
+    if (showAd) {
+      const interval = setInterval(() => {
+        setBuildingProgress(prev => (prev + 1) % 101);
+      }, 50);
+
+      return () => clearInterval(interval);
+    }
+  }, [showAd]);
+
+  // Building animation helper
+  const getBuildingAnimation = (progress: number) => {
+    const width = 30;
+    const filled = Math.floor((width * progress) / 100);
+    const empty = width - filled;
+    return `[${'='.repeat(filled)}${empty > 0 ? '>' : ''}${'.'.repeat(Math.max(0, empty - 1))}] ${progress}%`;
+  };
+
   const bots = [
     {
       title: "Journalist MOAI",
@@ -201,6 +222,52 @@ export default function Home() {
           }}
         />
       </div>
+
+      {/* Advertisement Modal */}
+      {showAd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-xl"></div>
+          <div className="relative bg-white/10 backdrop-blur-md p-8 rounded-2xl max-w-5xl w-full mx-4 border border-white/20">
+            {/* Close Button */}
+            <button 
+              onClick={() => setShowAd(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            {/* Ad Content */}
+            <div className="flex flex-col md:flex-row gap-8">
+              {/* Image Section */}
+              <div className="w-full md:w-1/2">
+                <div className="relative w-full aspect-square rounded-xl overflow-hidden">
+                  <Image
+                    src="/newterminal.jpeg"
+                    alt="MOAI Advertisement"
+                    fill
+                    className="object-contain bg-black/50"
+                    priority
+                  />
+                </div>
+              </div>
+
+              {/* Text Content Section */}
+              <div className="w-full md:w-1/2 flex items-center">
+                <div className="space-y-6 w-full">
+                  <div className="text-left space-y-4">
+                    <p className="text-2xl text-blue-400 font-mono">loading new terminal...</p>
+                    <div className="font-mono">
+                      <p className="text-blue-400">{getBuildingAnimation(buildingProgress)}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <header className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${isScrolled ? 'bg-black/80 backdrop-blur-sm' : 'bg-transparent'}`}>

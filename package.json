@@ -9,6 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@huggingface/inference": "^2.6.4",
+    "@langchain/community": "^0.3.37",
     "@netlify/functions": "^2.4.1",
     "@solana/spl-token": "^0.4.9",
     "@solana/wallet-adapter-base": "^0.9.23",
