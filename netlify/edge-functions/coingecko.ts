@@ -3,6 +3,8 @@ import { Context } from '@netlify/edge-functions';
 const COINGECKO_API_URL = 'https://api.coingecko.com/api/v3';
 
 export default async (request: Request, context: Context) => {
+  const apiKey = process.env.COINGECKO_API_KEY;
+
   if (request.method !== 'GET') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,

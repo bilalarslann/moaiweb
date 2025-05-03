@@ -1,7 +1,7 @@
-const CryptoJS = require('crypto-js');
-const fs = require('fs');
-const path = require('path');
-const dotenv = require('dotenv');
+import * as CryptoJS from 'crypto-js';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as dotenv from 'dotenv';
 const { randomBytes } = require('crypto');
 
 // .env dosyasını yükle

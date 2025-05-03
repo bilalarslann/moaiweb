@@ -2,7 +2,7 @@ import { Context } from '@netlify/edge-functions';
 import OpenAI from 'openai';
 
 const openai = new OpenAI({
-  apiKey: Deno.env.get('OPENAI_API_KEY'),
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 export default async (request: Request, context: Context) => {
