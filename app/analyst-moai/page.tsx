@@ -1036,7 +1036,7 @@ export default function AnalistMoai() {
       "Piyasa nasıl görünüyor?",
       "Altcoin sezonu ne zaman başlayacak?",
     ]
-  }), [userLanguage]);
+  }), []); // userLanguage bağımlılığını kaldırdım çünkü placeholders değişmiyor
 
   // Token verification effect
   useEffect(() => {

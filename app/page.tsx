@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 
 export default function Home() {
@@ -42,8 +42,7 @@ export default function Home() {
     };
   }, []);
 
-  // Separate animation loop for smooth transitions
-  const animate = (time: number) => {
+  const animate = useCallback(() => {
     if (previousTimeRef.current !== undefined) {
       const eyesCenterX = 956;
       const eyesCenterY = 164;
@@ -68,9 +67,9 @@ export default function Home() {
         opacity: currentOpacity + (targetOpacity - currentOpacity) * 0.3
       });
     }
-    previousTimeRef.current = time;
+    previousTimeRef.current = performance.now();
     requestRef.current = requestAnimationFrame(animate);
-  };
+  }, [mousePosition, glowValues]);
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(animate);
@@ -79,7 +78,7 @@ export default function Home() {
         cancelAnimationFrame(requestRef.current);
       }
     };
-  }, [mousePosition, animate]); // animate bağımlılığını ekledim
+  }, [animate]);
 
   const nextBot = () => {
     setCurrentBot((prev) => {
