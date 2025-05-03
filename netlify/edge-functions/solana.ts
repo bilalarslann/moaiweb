@@ -1,39 +1,44 @@
 import { Context } from '@netlify/edge-functions';
-import { Connection, PublicKey } from '@solana/web3.js';
-import { getAccount } from '@solana/spl-token';
-
-const connection = new Connection('https://api.mainnet-beta.solana.com');
 
 export default async (request: Request, context: Context) => {
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+
   if (request.method !== 'GET') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
-      headers: { 'Content-Type': 'application/json' },
+      headers,
     });
   }
 
   try {
     const url = new URL(request.url);
-    const address = url.searchParams.get('address');
-    if (!address) {
-      return new Response(JSON.stringify({ error: 'Address is required' }), {
+    const endpoint = url.searchParams.get('endpoint');
+    const params = url.searchParams.toString().replace('endpoint=' + endpoint + '&', '');
+
+    if (!endpoint) {
+      return new Response(JSON.stringify({ error: 'Endpoint parameter is required' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' },
+        headers,
       });
     }
 
-    const pubkey = new PublicKey(address);
-    const account = await getAccount(connection, pubkey);
+    const response = await fetch(`https://api.solana.com${endpoint}?${params}`, {
+      headers,
+    });
 
-    return new Response(JSON.stringify(account), {
+    const data = await response.json();
+
+    return new Response(JSON.stringify(data), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers,
     });
   } catch (error) {
     console.error('Solana Error:', error);
     return new Response(JSON.stringify({ error: 'Solana API Error' }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers,
     });
   }
 }; 

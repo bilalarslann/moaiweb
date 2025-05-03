@@ -1,9 +1,4 @@
 import { Context } from '@netlify/edge-functions';
-import OpenAI from 'openai';
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
 
 export default async (request: Request, context: Context) => {
   if (request.method !== 'POST') {
@@ -17,12 +12,21 @@ export default async (request: Request, context: Context) => {
     const body = await request.json();
     const { messages } = body;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages,
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-3.5-turbo",
+        messages,
+      }),
     });
 
-    return new Response(JSON.stringify(response), {
+    const data = await response.json();
+
+    return new Response(JSON.stringify(data), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
