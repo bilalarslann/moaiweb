@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import ReactMarkdown from 'react-markdown';
 import { useWallet } from '@solana/wallet-adapter-react';
@@ -1021,7 +1021,7 @@ export default function AnalistMoai() {
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [maxSuggestions, setMaxSuggestions] = useState(5);
 
-  const placeholders = {
+  const placeholders = useMemo(() => ({
     en: [
       "Can you do technical analysis for Bitcoin?",
       "What's the price target for Ethereum?",
@@ -1036,7 +1036,7 @@ export default function AnalistMoai() {
       "Piyasa nasıl görünüyor?",
       "Altcoin sezonu ne zaman başlayacak?",
     ]
-  };
+  }), [userLanguage]);
 
   // Token verification effect
   useEffect(() => {
@@ -1146,7 +1146,7 @@ export default function AnalistMoai() {
     };
 
     checkTokenBalance();
-  }, [connected, publicKey]);
+  }, [connected, publicKey, disconnect, userLanguage]);
 
   // Placeholder effect
   useEffect(() => {
@@ -1160,7 +1160,7 @@ export default function AnalistMoai() {
     setCurrentPlaceholder(placeholders[userLanguage][Math.floor(Math.random() * placeholders[userLanguage].length)]);
 
     return () => clearInterval(interval);
-  }, [userLanguage, placeholders, setCurrentPlaceholder]);
+  }, [placeholders, userLanguage, setCurrentPlaceholder]);
 
   // Click outside handler effect
   useEffect(() => {

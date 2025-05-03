@@ -79,7 +79,7 @@ export default function Home() {
         cancelAnimationFrame(requestRef.current);
       }
     };
-  }, [mousePosition]); // Only re-run when mouse position changes
+  }, [mousePosition, animate]); // animate bağımlılığını ekledim
 
   const nextBot = () => {
     setCurrentBot((prev) => {
